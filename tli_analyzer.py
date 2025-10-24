@@ -6,7 +6,7 @@
 блокировок транзакций вместе с их первопричинами (виновными сессиями).
 
 Использование:
-    python tli_analyzer.py --log-file <path> [--sort]
+    python tli_analyzer.py --log-file <path> [--no-sort]
 """
 
 import argparse
@@ -29,14 +29,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python tli_analyzer.py --log-file docs/22_1_sorted.log
-    python tli_analyzer.py --log-file docs/22_1_sorted.log > report.yaml
-    python tli_analyzer.py --log-file docs/22_1.log --sort > report.yaml
+    python tli_analyzer.py --log-file docs/22_1.log
+    python tli_analyzer.py --log-file docs/22_1.log > report.yaml
+    python tli_analyzer.py --log-file docs/22_1_sorted.log --no-sort > report.yaml
     
     # Using stdin with grep pre-filtering:
-    grep "Transaction locks invalidated\\|Acquire lock\\|Break locks" docs/22_1_sorted.log | python tli_analyzer.py
-    cat docs/22_1_sorted.log | python tli_analyzer.py > report.yaml
-    cat docs/22_1.log | python tli_analyzer.py --sort > report.yaml
+    grep "Transaction locks invalidated\\|Acquire lock\\|Break locks" docs/22_1.log | python tli_analyzer.py
+    cat docs/22_1.log | python tli_analyzer.py > report.yaml
+    cat docs/22_1_sorted.log | python tli_analyzer.py --no-sort > report.yaml
         """
     )
     
@@ -47,9 +47,9 @@ Examples:
     
     
     parser.add_argument(
-        '--sort', '-s',
+        '--no-sort',
         action='store_true',
-        help='Sort log lines by timestamp in reverse chronological order before processing'
+        help='Disable sorting of log lines by timestamp (logs are sorted by default)'
     )
     
     args = parser.parse_args()
@@ -69,7 +69,7 @@ Examples:
         input_source = None  # Will use stdin
     
     try:
-        analyze_logs(input_source, args.sort)
+        analyze_logs(input_source, not args.no_sort)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -89,7 +89,7 @@ def get_input_stream(input_source: Optional[str], sort_logs: bool):
         return sys.stdin
 
 
-def analyze_logs(input_source: Optional[str], sort_logs: bool = False) -> None:
+def analyze_logs(input_source: Optional[str], sort_logs: bool = True) -> None:
     """Анализирует лог (из файла или stdin) и генерирует отчет."""
     
     parser = LogParser()

@@ -89,7 +89,7 @@ class TestTLIAnalyzer:
         mock_analyze.assert_called_once()
         args, kwargs = mock_analyze.call_args
         assert args[0] == 'test.log'  # input_source
-        assert args[1] == False  # sort_logs
+        assert args[1] == True  # sort_logs (default is now True)
         
     @patch('sys.argv', ['tli_analyzer.py'])
     @patch('sys.stdin.isatty')
@@ -104,7 +104,7 @@ class TestTLIAnalyzer:
         mock_analyze.assert_called_once()
         args, kwargs = mock_analyze.call_args
         assert args[0] is None  # input_source (stdin)
-        assert args[1] == False  # sort_logs
+        assert args[1] == True  # sort_logs (default is now True)
         
     @patch('sys.argv', ['tli_analyzer.py'])
     @patch('sys.stdin.isatty')
@@ -128,11 +128,11 @@ class TestTLIAnalyzer:
             
         assert exc_info.value.code == 1
         
-    @patch('sys.argv', ['tli_analyzer.py', '--sort'])
+    @patch('sys.argv', ['tli_analyzer.py', '--no-sort'])
     @patch('sys.stdin.isatty')
     @patch('tli_analyzer.analyze_logs')
-    def test_main_with_sort_option(self, mock_analyze, mock_isatty):
-        """Test main function with sort option."""
+    def test_main_with_no_sort_option(self, mock_analyze, mock_isatty):
+        """Test main function with no-sort option."""
         mock_isatty.return_value = False  # Simulate piped input
         
         main()
@@ -141,7 +141,7 @@ class TestTLIAnalyzer:
         mock_analyze.assert_called_once()
         args, kwargs = mock_analyze.call_args
         assert args[0] is None  # input_source (stdin)
-        assert args[1] == True  # sort_logs
+        assert args[1] == False  # sort_logs (disabled with --no-sort)
         
     def test_analyze_logs_no_verbose_output(self, capsys):
         """Test analyze_logs function produces no verbose output."""
@@ -173,20 +173,20 @@ class TestTLIAnalyzer:
         assert "Step 2:" not in captured.out
         assert "Analyzing YDB" not in captured.out
     
-    @patch('sys.argv', ['tli_analyzer.py', '--sort'])
+    @patch('sys.argv', ['tli_analyzer.py', '--no-sort'])
     @patch('sys.stdin.isatty')
     @patch('tli_analyzer.analyze_logs')
-    def test_main_with_sort_flag(self, mock_analyze, mock_isatty):
-        """Test main function with sort flag."""
+    def test_main_with_no_sort_flag(self, mock_analyze, mock_isatty):
+        """Test main function with no-sort flag."""
         mock_isatty.return_value = False  # Simulate piped input
         
         main()
         
-        # Check that analyze_logs was called with sort=True
+        # Check that analyze_logs was called with sort=False
         mock_analyze.assert_called_once()
         args, kwargs = mock_analyze.call_args
         assert args[0] is None  # input_source (stdin)
-        assert args[1] == True  # sort_logs
+        assert args[1] == False  # sort_logs (disabled with --no-sort)
 
 
 if __name__ == '__main__':

@@ -39,7 +39,7 @@
 
 Пример использования: 
 ```bash
-grep DATA_INTEGRITY *.log | grep "2025-10-22T12:06" | python tli_analyzer.py --output report.yaml
+grep DATA_INTEGRITY *.log | grep "2025-10-22T12:06" | python tli_analyzer.py > report.yaml
 
 ```
 
@@ -127,7 +127,3 @@ lock_invalidation_events:
 ```
 
 Здесь для примера вместо текста запросов выведены хэши.
-
-## Ограничения
-
-Весь лог загружается в память - ее должно хватить
