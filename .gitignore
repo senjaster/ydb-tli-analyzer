@@ -1,0 +1,10 @@
+logs
+docs
+**/__pycache__
+
+.venv
+.pytest_cache
+
+.vscode
+
+.coverage

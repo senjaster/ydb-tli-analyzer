@@ -1,0 +1,1 @@
+"""Tests for YDB Transaction Lock Invalidation Analyzer."""

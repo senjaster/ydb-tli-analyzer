@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""
+Shared data models for chain tracing functionality.
+"""
+
+from typing import List, Optional
+from dataclasses import dataclass
+from log_parser import LogEntry
+
+
+@dataclass
+class TraceInfo:
+    """Aggregated information extracted from all entries with the same trace_id."""
+    query_text: Optional[str] = None
+    tx_id: Optional[str] = None
+    session_id: Optional[str] = None
+    lock_id: Optional[str] = None  # For LOCKS_BROKEN entries
+    representative_entry: Optional[LogEntry] = None  # First entry with session_id
+
+
+@dataclass
+class LockInvalidationChain:
+    """Полное описание всей информации, извлеченной из лога по одной ошибке TLI."""
+    victim_session_id: str
+    victim_trace_id: str
+    lock_id: str
+    culprit_phy_tx_id: str
+    culprit_trace_id: str
+    culprit_session_id: str
+    victim_entry: LogEntry
+    culprit_entry: Optional[LogEntry] = None
+    victim_query_text: Optional[str] = None
+    culprit_query_text: Optional[str] = None
+    table_name: Optional[str] = None
+    victim_tx_id: Optional[str] = None
+    culprit_tx_id: Optional[str] = None
+    victim_queries: Optional[List[LogEntry]] = None
+    culprit_queries: Optional[List[LogEntry]] = None
