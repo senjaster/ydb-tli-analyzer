@@ -69,13 +69,14 @@ class TestChainTracer:
         
         
     def test_find_invalidated_entries(self):
-        """Test finding invalidated entries."""
-        invalidated = self.tracer.find_invalidated_entries()
+        """Test finding invalidated entries by running chain analysis."""
+        chains = self.tracer.find_all_invalidation_chains()
         
-        assert len(invalidated) == 1
-        assert invalidated[0].session_id == "ydb://session/3?node_id=50005&id=test_session"
-        assert invalidated[0].status == "ABORTED"
-        assert "Transaction locks invalidated" in invalidated[0].issues
+        # Should find one chain from the sample data
+        assert len(chains) == 1
+        assert chains[0].victim_session_id == "ydb://session/3?node_id=50005&id=test_session"
+        assert chains[0].victim_entry.status == "ABORTED"
+        assert "Transaction locks invalidated" in chains[0].victim_entry.issues
         
         
     @pytest.mark.parametrize("issues,expected_table", [
@@ -162,10 +163,10 @@ class TestChainTracer:
             pytest.skip(f"Test fixture not found: {fixture_path}")
             
         parser = LogParser()
-        entries = parser.parse_file(fixture_path)
-        tracer = ChainTracerSinglePass(entries)
-        
-        chains = tracer.find_all_invalidation_chains()
+        with open(fixture_path, 'r', encoding='utf-8') as f:
+            entries = parser.parse_stream(f)
+            tracer = ChainTracerSinglePass(entries)
+            chains = tracer.find_all_invalidation_chains()
         
         # We should find at least one chain from the test data
         assert len(chains) >= 0  # May be 0 if chain tracing fails due to incomplete data
@@ -215,9 +216,6 @@ class TestChainTracer:
     def test_empty_log_entries(self):
         """Test tracer with empty log entries."""
         empty_tracer = ChainTracerSinglePass([])
-        
-        invalidated = empty_tracer.find_invalidated_entries()
-        assert len(invalidated) == 0
         
         chains = empty_tracer.find_all_invalidation_chains()
         assert len(chains) == 0

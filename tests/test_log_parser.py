@@ -85,36 +85,32 @@ class TestLogParser:
         assert entry.status == "LOCKS_BROKEN"
         assert entry.phy_tx_id == "562949953837887"
         
-    def test_parse_file_with_fixture(self):
-        """Test parsing the test fixture file."""
+    def test_parse_stream_with_fixture(self):
+        """Test parsing the test fixture file using parse_stream."""
         fixture_path = os.path.join(os.path.dirname(__file__), 'fixtures', 'test_log.log')
         
         if not os.path.exists(fixture_path):
             pytest.skip(f"Test fixture not found: {fixture_path}")
             
-        entries = self.parser.parse_file(fixture_path)
+        with open(fixture_path, 'r', encoding='utf-8') as f:
+            entries = list(self.parser.parse_stream(f))
         
         assert len(entries) > 0
         assert all(isinstance(entry, LogEntry) for entry in entries)
         
         # Check that we have some entries with transaction lock invalidation
         invalidated_entries = [
-            entry for entry in entries 
+            entry for entry in entries
             if entry.issues and "Transaction locks invalidated" in entry.issues and entry.status == "ABORTED"
         ]
         assert len(invalidated_entries) > 0
         
         # Check that we have some entries with BreakLocks
         break_lock_entries = [
-            entry for entry in entries 
+            entry for entry in entries
             if entry.break_locks and len(entry.break_locks) > 0
         ]
         assert len(break_lock_entries) > 0
-        
-    def test_parse_file_not_found(self):
-        """Test parsing non-existent file raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            self.parser.parse_file("non_existent_file.log")
             
     def test_log_entry_dataclass(self):
         """Test LogEntry dataclass properties."""
@@ -159,7 +155,7 @@ invalid line that should be skipped
 окт 22 10:54:51 ydb-static-node-1 ydbd[846]: 2025-10-22T07:54:51.425247Z :DATA_INTEGRITY INFO: Component: DataShard,Type: Finished,TabletId: 72075186224047627,PhyTxId: 562949953837887,Status: LOCKS_BROKEN,"""
         
         stream = StringIO(sample_data)
-        entries = self.parser.parse_stream(stream)
+        entries = list(self.parser.parse_stream(stream))
         
         assert len(entries) == 3  # Should parse 3 valid entries, skip 1 invalid
         assert all(isinstance(entry, LogEntry) for entry in entries)
@@ -185,7 +181,7 @@ invalid line that should be skipped
     def test_parse_stream_empty(self):
         """Test parsing empty stream."""
         empty_stream = StringIO("")
-        entries = self.parser.parse_stream(empty_stream)
+        entries = list(self.parser.parse_stream(empty_stream))
         assert len(entries) == 0
         
     def test_parse_stream_only_invalid_lines(self):
@@ -195,7 +191,7 @@ Another invalid line
 Yet another invalid line"""
         
         stream = StringIO(invalid_data)
-        entries = self.parser.parse_stream(stream)
+        entries = list(self.parser.parse_stream(stream))
         assert len(entries) == 0
         
     def test_parse_stream_mixed_valid_invalid(self):
@@ -207,44 +203,27 @@ Invalid line 2
 Invalid line 3"""
         
         stream = StringIO(mixed_data)
-        entries = self.parser.parse_stream(stream)
+        entries = list(self.parser.parse_stream(stream))
         
         assert len(entries) == 2  # Should parse 2 valid entries
         assert entries[0].node == "ydb-static-node-3"
         assert entries[1].node == "ydb-static-node-1"
         
-    def test_parse_file_uses_parse_stream(self):
-        """Test that parse_file method uses parse_stream internally."""
-        # Create a temporary test file
+    def test_parse_stream_consistency(self):
+        """Test that parse_stream produces consistent results."""
+        # Test data
         test_data = """окт 22 10:54:51 ydb-static-node-3 ydbd[889]: 2025-10-22T07:54:51.433950Z :DATA_INTEGRITY DEBUG: Component: SessionActor,SessionId: test,TraceId: test123"""
         
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as temp_file:
-            temp_file.write(test_data)
-            temp_file_path = temp_file.name
-            
-        try:
-            # Parse using parse_file
-            file_entries = self.parser.parse_file(temp_file_path)
-            
-            # Parse using parse_stream with the same data
-            stream_entries = self.parser.parse_stream(StringIO(test_data))
-            
-            # Results should be identical
-            assert len(file_entries) == len(stream_entries)
-            assert len(file_entries) == 1
-            
-            # Compare the parsed entries
-            file_entry = file_entries[0]
-            stream_entry = stream_entries[0]
-            
-            assert file_entry.node == stream_entry.node
-            assert file_entry.process == stream_entry.process
-            assert file_entry.message_type == stream_entry.message_type
-            assert file_entry.log_level == stream_entry.log_level
-            assert file_entry.session_id == stream_entry.session_id
-            assert file_entry.trace_id == stream_entry.trace_id
-            
-        finally:
-            # Clean up temporary file
-            os.unlink(temp_file_path)
+        # Parse using parse_stream with StringIO
+        stream_entries = list(self.parser.parse_stream(StringIO(test_data)))
+        
+        # Results should be consistent
+        assert len(stream_entries) == 1
+        
+        entry = stream_entries[0]
+        assert entry.node == "ydb-static-node-3"
+        assert entry.process == "ydbd[889]"
+        assert entry.message_type == "DATA_INTEGRITY"
+        assert entry.log_level == "DEBUG"
+        assert entry.session_id == "test"
+        assert entry.trace_id == "test123"

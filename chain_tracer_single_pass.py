@@ -7,7 +7,7 @@
 и заканчивая виновником (первое сообщение), поэтому достаточно будет одного скана.
 """
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Iterable
 from log_parser import LogEntry
 from chain_models import LockInvalidationChain
 import re
@@ -17,7 +17,7 @@ import logging
 class ChainTracerSinglePass:
     """Ищет в логе все данные о TLI за один проход по отсортированному в обратном порядке логу."""
     
-    def __init__(self, log_entries: List[LogEntry]):
+    def __init__(self, log_entries: Iterable[LogEntry]):
         self.log_entries = log_entries
         # Словарь для хранения всех цепочек, ключ - trace_id жертвы
         self.chains: Dict[str, LockInvalidationChain] = {}
@@ -31,28 +31,25 @@ class ChainTracerSinglePass:
         self.entries_by_trace: Dict[str, LogEntry] = {}
     
     def find_all_invalidation_chains(self) -> List[LockInvalidationChain]:
-        """Находит все цепочки TLI в логе за один проход."""
-        # Шаг 1: Отсортировать строки в обратном хронологическом порядке
-        sorted_entries = self._sort_entries_reverse()
+        """Находит все цепочки TLI в логе за один проход.
         
-        # Шаг 2: Перебираем строки последовательно и строим цепочки
-        for entry in sorted_entries:
+        Предполагается, что log_entries уже отсортированы в обратном хронологическом порядке.
+        """
+        # Перебираем строки последовательно и строим цепочки
+        for entry in self.log_entries:
             self._process_entry(entry)
         
-        # Шаг 3: Завершить все незавершенные цепочки
+        # Завершить все незавершенные цепочки
         self._complete_remaining_chains()
         
-        # Шаг 4: Заполнить victim_queries и culprit_queries для найденных цепочек
+        # Заполнить victim_queries и culprit_queries для найденных цепочек
         self._populate_queries()
         
-        # Шаг 5: Проверить, что все цепочки полностью заполнены
+        # Проверить, что все цепочки полностью заполнены
         self._validate_chains()
         
         return list(self.chains.values())
     
-    def _sort_entries_reverse(self) -> List[LogEntry]:
-        """Сортирует записи в обратном хронологическом порядке."""
-        return sorted(self.log_entries, key=lambda x: x.timestamp or '', reverse=True)
     
     def _process_entry(self, entry: LogEntry):
         """Обрабатывает одну запись лога и обновляет цепочки."""
@@ -319,13 +316,3 @@ class ChainTracerSinglePass:
         
         return None
     
-    # Методы для совместимости с оригинальным ChainTracer
-    def find_invalidated_entries(self) -> List[LogEntry]:
-        """Находит все записи с сообщениями 'Transaction locks invalidated'."""
-        invalidated_entries = []
-        
-        for entry in self.log_entries:
-            if self._is_transaction_locks_invalidated(entry):
-                invalidated_entries.append(entry)
-        
-        return invalidated_entries

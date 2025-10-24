@@ -180,14 +180,56 @@ class TestTLIAnalyzer:
                 
             # Check verbose output
             captured = capsys.readouterr()
-            assert "Step 1: Parsing log data..." in captured.out
-            assert "Step 2: Tracing chains to find culprit sessions..." in captured.out
+            assert "Step 1: Setting up log parser..." in captured.out
+            assert "Step 2: Streaming log analysis and tracing chains..." in captured.out
             assert "Analyzing YDB log data from stdin..." in captured.out
             
         finally:
             # Clean up temporary file
             if os.path.exists(output_file_path):
                 os.unlink(output_file_path)
+
+
+    def test_analyze_logs_with_sort_flag(self, capsys):
+        """Test analyze_logs function with sort flag enabled."""
+        # Create unsorted test data (older timestamp first)
+        test_data = """окт 22 10:54:51 ydb-static-node-1 ydbd[846]: 2025-10-22T07:54:51.100000Z :DATA_INTEGRITY INFO: older entry
+окт 22 10:54:51 ydb-static-node-2 ydbd[847]: 2025-10-22T07:54:51.300000Z :DATA_INTEGRITY DEBUG: newer entry"""
+        
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yaml') as output_file:
+            output_file_path = output_file.name
+            
+        try:
+            # Mock stdin with unsorted test data
+            with patch('sys.stdin', StringIO(test_data)):
+                analyze_logs(None, output_file_path, verbose=True, sort_logs=True)
+                
+            # Check verbose output mentions sorting
+            captured = capsys.readouterr()
+            assert "Step 2: Sorting and streaming log analysis..." in captured.out
+            assert "Analyzing YDB log data from stdin..." in captured.out
+            
+        finally:
+            # Clean up temporary file
+            if os.path.exists(output_file_path):
+                os.unlink(output_file_path)
+    
+    @patch('sys.argv', ['tli_analyzer.py', '--sort', '--verbose'])
+    @patch('sys.stdin.isatty')
+    @patch('tli_analyzer.analyze_logs')
+    def test_main_with_sort_flag(self, mock_analyze, mock_isatty):
+        """Test main function with sort flag."""
+        mock_isatty.return_value = False  # Simulate piped input
+        
+        main()
+        
+        # Check that analyze_logs was called with sort=True
+        mock_analyze.assert_called_once()
+        args, kwargs = mock_analyze.call_args
+        assert args[0] is None  # input_source (stdin)
+        assert args[1] == 'tli_analysis_report.yaml'  # output_file
+        assert args[2] == True  # verbose
+        assert args[3] == True  # sort
 
 
 if __name__ == '__main__':

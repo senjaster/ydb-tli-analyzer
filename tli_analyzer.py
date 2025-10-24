@@ -6,7 +6,7 @@
 блокировок транзакций вместе с их первопричинами (виновными сессиями).
 
 Использование:
-    python tli_analyzer.py --log-file <path> [--output <path>] [--verbose]
+    python tli_analyzer.py --log-file <path> [--output <path>] [--verbose] [--sort]
 """
 
 import argparse
@@ -18,6 +18,7 @@ from log_parser import LogParser, LogEntry
 from chain_tracer_single_pass import ChainTracerSinglePass
 from chain_models import LockInvalidationChain
 from yaml_reporter import YAMLReporter
+from log_sorter import sort_log_stream
 
 
 def main():
@@ -31,10 +32,12 @@ Examples:
     python tli_analyzer.py --log-file docs/22_1_sorted.log
     python tli_analyzer.py --log-file docs/22_1_sorted.log --output report.yaml
     python tli_analyzer.py --log-file docs/22_1_sorted.log --output report.yaml --verbose
+    python tli_analyzer.py --log-file docs/22_1.log --sort --output report.yaml --verbose
     
     # Using stdin with grep pre-filtering:
     grep "Transaction locks invalidated\\|Acquire lock\\|Break locks" docs/22_1_sorted.log | python tli_analyzer.py
     cat docs/22_1_sorted.log | python tli_analyzer.py --output report.yaml --verbose
+    cat docs/22_1.log | python tli_analyzer.py --sort --output report.yaml --verbose
         """
     )
     
@@ -55,6 +58,12 @@ Examples:
         help='Enable verbose output'
     )
     
+    parser.add_argument(
+        '--sort', '-s',
+        action='store_true',
+        help='Sort log lines by timestamp in reverse chronological order before processing'
+    )
+    
     args = parser.parse_args()
     
     # Validate input - either file or stdin
@@ -72,13 +81,27 @@ Examples:
         input_source = None  # Will use stdin
     
     try:
-        analyze_logs(input_source, args.output, args.verbose)
+        analyze_logs(input_source, args.output, args.verbose, args.sort)
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
 
 
-def analyze_logs(input_source: Optional[str], output_file: str, verbose: bool = False) -> None:
+def get_input_stream(input_source: Optional[str], sort_logs: bool):
+    if input_source:
+        # File input
+        file_stream = open(input_source, 'r', encoding='utf-8')
+        if sort_logs:
+            return sort_log_stream(file_stream)
+        return file_stream
+    else:
+        # Stdin input
+        if sort_logs:
+            return sort_log_stream(sys.stdin)
+        return sys.stdin
+
+
+def analyze_logs(input_source: Optional[str], output_file: str, verbose: bool = False, sort_logs: bool = False) -> None:
     """Анализирует лог (из файла или stdin) и генерирует отчет."""
     
     if input_source:
@@ -88,45 +111,33 @@ def analyze_logs(input_source: Optional[str], output_file: str, verbose: bool = 
         print("Analyzing YDB log data from stdin...")
         source_description = "stdin"
     
-    # Шаг 1: Парсинг лога
+    # Шаг 1: Создание парсера
     if verbose:
-        print("Step 1: Parsing log data...")
+        print("Step 1: Setting up log parser...")
     
     parser = LogParser()
-    try:
-        if input_source:
-            log_entries = parser.parse_file(input_source)
-        else:
-            log_entries = parser.parse_stream(sys.stdin)
-        print(f"Parsed {len(log_entries)} log entries")
-    except Exception as e:
-        raise Exception(f"Failed to parse log data: {e}")
     
-    if not log_entries:
-        print("No valid log entries found in the file.")
-        return
-    
-    # Шаг 2: Трассировка цепочек для поиска виновников
+    # Шаг 2: Трассировка цепочек для поиска виновников (стриминг)
     if verbose:
-        print("Step 2: Tracing chains to find culprit sessions...")
+        if sort_logs:
+            print("Step 2: Sorting and streaming log analysis...")
+        else:
+            print("Step 2: Streaming log analysis and tracing chains...")
     
-    tracer = ChainTracerSinglePass(log_entries)
-    
-    # Сначала найти инвалидированные записи для подсчета
-    invalidated_entries = tracer.find_invalidated_entries()
-    print(f"Found {len(invalidated_entries)} 'Transaction locks invalidated' events")
-    
-    if not invalidated_entries:
-        print("No transaction lock invalidation events found.")
-        return
-    
-    chains = tracer.find_all_invalidation_chains()
+    try:
+        input_stream = get_input_stream(input_source, sort_logs)
+        log_entries_stream = parser.parse_stream(input_stream)
+        tracer = ChainTracerSinglePass(log_entries_stream)
+        chains = tracer.find_all_invalidation_chains()
+        
+    except Exception as e:
+        raise Exception(f"Failed to analyze log data: {e}")
     
     print(f"Successfully traced {len(chains)} complete chains")
     
-    if len(chains) < len(invalidated_entries):
-        failed_count = len(invalidated_entries) - len(chains)
-        print(f"Warning: Failed to trace {failed_count} chains (incomplete data)")
+    if not chains:
+        print("No transaction lock invalidation events found.")
+        return
     
     # Шаг 3: Генерация YAML отчета
     if verbose:

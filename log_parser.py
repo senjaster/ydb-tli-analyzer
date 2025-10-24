@@ -5,7 +5,7 @@
 """
 
 import re
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Iterator, TextIO
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -107,36 +107,18 @@ class LogParser:
         
         return entry
     
-    def parse_file(self, file_path: str) -> List[LogEntry]:
-        """Парсит весь лог-файл"""
-        entries = []
-        
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                entries = self.parse_stream(f)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Log file not found: {file_path}")
-        except Exception as e:
-            raise Exception(f"Error reading log file {file_path}: {e}")
-        
-        return entries
-    
-    def parse_stream(self, stream) -> List[LogEntry]:
-        """Парсит поток данных (файл или stdin)"""
-        entries = []
-        
+    def parse_stream(self, stream: TextIO) -> Iterator[LogEntry]:
+        """Парсит поток данных (файл или stdin) и возвращает генератор LogEntry объектов"""
         try:
             for line_num, line in enumerate(stream, 1):
                 try:
                     entry = self.parse_line(line)
                     if entry:
-                        entries.append(entry)
+                        yield entry
                 except Exception as e:
                     print(f"Warning: Failed to parse line {line_num}: {e}")
                     continue
         except Exception as e:
             raise Exception(f"Error reading from stream: {e}")
-        
-        return entries
     
 
