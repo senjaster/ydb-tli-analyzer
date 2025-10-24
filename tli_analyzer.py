@@ -6,7 +6,7 @@
 блокировок транзакций вместе с их первопричинами (виновными сессиями).
 
 Использование:
-    python tli_analyzer.py --log-file <path> [--output <path>] [--verbose] [--sort]
+    python tli_analyzer.py --log-file <path> [--sort]
 """
 
 import argparse
@@ -30,14 +30,13 @@ def main():
         epilog="""
 Examples:
     python tli_analyzer.py --log-file docs/22_1_sorted.log
-    python tli_analyzer.py --log-file docs/22_1_sorted.log --output report.yaml
-    python tli_analyzer.py --log-file docs/22_1_sorted.log --output report.yaml --verbose
-    python tli_analyzer.py --log-file docs/22_1.log --sort --output report.yaml --verbose
+    python tli_analyzer.py --log-file docs/22_1_sorted.log > report.yaml
+    python tli_analyzer.py --log-file docs/22_1.log --sort > report.yaml
     
     # Using stdin with grep pre-filtering:
     grep "Transaction locks invalidated\\|Acquire lock\\|Break locks" docs/22_1_sorted.log | python tli_analyzer.py
-    cat docs/22_1_sorted.log | python tli_analyzer.py --output report.yaml --verbose
-    cat docs/22_1.log | python tli_analyzer.py --sort --output report.yaml --verbose
+    cat docs/22_1_sorted.log | python tli_analyzer.py > report.yaml
+    cat docs/22_1.log | python tli_analyzer.py --sort > report.yaml
         """
     )
     
@@ -46,17 +45,6 @@ Examples:
         help='Path to the YDB log file to analyze (if not provided, reads from stdin)'
     )
     
-    parser.add_argument(
-        '--output', '-o',
-        default='tli_analysis_report.yaml',
-        help='Output file for the YAML report (default: tli_analysis_report.yaml)'
-    )
-    
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Enable verbose output'
-    )
     
     parser.add_argument(
         '--sort', '-s',
@@ -69,21 +57,21 @@ Examples:
     # Validate input - either file or stdin
     if args.log_file:
         if not os.path.exists(args.log_file):
-            print(f"Error: Log file not found: {args.log_file}")
+            print(f"Error: Log file not found: {args.log_file}", file=sys.stderr)
             sys.exit(1)
         input_source = args.log_file
     else:
         # Check if stdin has data
         if sys.stdin.isatty():
-            print("Error: No input provided. Either specify --log-file or pipe data to stdin.")
-            print("Use --help for usage examples.")
+            print("Error: No input provided. Either specify --log-file or pipe data to stdin.", file=sys.stderr)
+            print("Use --help for usage examples.", file=sys.stderr)
             sys.exit(1)
         input_source = None  # Will use stdin
     
     try:
-        analyze_logs(input_source, args.output, args.verbose, args.sort)
+        analyze_logs(input_source, args.sort)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -101,28 +89,15 @@ def get_input_stream(input_source: Optional[str], sort_logs: bool):
         return sys.stdin
 
 
-def analyze_logs(input_source: Optional[str], output_file: str, verbose: bool = False, sort_logs: bool = False) -> None:
+def analyze_logs(input_source: Optional[str], sort_logs: bool = False) -> None:
     """Анализирует лог (из файла или stdin) и генерирует отчет."""
     
     if input_source:
-        print(f"Analyzing YDB log file: {input_source}")
         source_description = input_source
     else:
-        print("Analyzing YDB log data from stdin...")
         source_description = "stdin"
     
-    # Шаг 1: Создание парсера
-    if verbose:
-        print("Step 1: Setting up log parser...")
-    
     parser = LogParser()
-    
-    # Шаг 2: Трассировка цепочек для поиска виновников (стриминг)
-    if verbose:
-        if sort_logs:
-            print("Step 2: Sorting and streaming log analysis...")
-        else:
-            print("Step 2: Streaming log analysis and tracing chains...")
     
     try:
         input_stream = get_input_stream(input_source, sort_logs)
@@ -133,27 +108,15 @@ def analyze_logs(input_source: Optional[str], output_file: str, verbose: bool = 
     except Exception as e:
         raise Exception(f"Failed to analyze log data: {e}")
     
-    print(f"Successfully traced {len(chains)} complete chains")
-    
     if not chains:
-        print("No transaction lock invalidation events found.")
         return
-    
-    # Шаг 3: Генерация YAML отчета
-    if verbose:
-        print("Step 3: Generating YAML report...")
     
     reporter = YAMLReporter()
     
     try:
-        reporter.write_yaml_report(chains, source_description, output_file)
+        reporter.write_yaml_report_to_stdout(chains, source_description)
     except Exception as e:
         raise Exception(f"Failed to generate report: {e}")
-    
-    # Шаг 4: Вывод сводки
-    reporter.print_summary(chains)
-    
-    print(f"\nAnalysis complete! Report saved to: {output_file}")
 
 
 if __name__ == "__main__":
