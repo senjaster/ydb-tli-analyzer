@@ -102,7 +102,9 @@ class TestYAMLReporter:
             tmp_path = tmp_file.name
             
         try:
-            self.reporter.write_yaml_report(chains, "test_log.log", tmp_path)
+            # Write to file by opening it and passing as file parameter
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                self.reporter.write_yaml_report(chains, f)
             
             # Verify file was created
             assert os.path.exists(tmp_path)
@@ -116,7 +118,6 @@ class TestYAMLReporter:
             
             # Check metadata
             metadata = content['analysis_metadata']
-            assert metadata['log_file'] == "test_log.log"
             assert metadata['total_invalidation_events'] == 1
             assert 'generated_at' in metadata
             
@@ -145,7 +146,9 @@ class TestYAMLReporter:
             tmp_path = tmp_file.name
             
         try:
-            self.reporter.write_yaml_report(chains, "test_log.log", tmp_path)
+            # Write to file by opening it and passing as file parameter
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                self.reporter.write_yaml_report(chains, f)
             
             # Verify file was created
             assert os.path.exists(tmp_path)
@@ -168,65 +171,36 @@ class TestYAMLReporter:
         invalid_path = "/invalid/path/that/does/not/exist/report.yaml"
         
         with pytest.raises(Exception):
-            self.reporter.write_yaml_report(chains, "test_log.log", invalid_path)
+            with open(invalid_path, 'w') as f:
+                self.reporter.write_yaml_report(chains, f)
             
-    def test_print_summary(self, capsys):
-        """Test printing summary to stdout."""
+    def test_write_yaml_report_to_stdout(self):
+        """Test writing YAML report to stdout (default behavior)."""
         chains = [self.sample_chain]
         
-        self.reporter.print_summary(chains)
+        # Use StringIO to capture output instead of relying on capsys
+        from io import StringIO
+        output_buffer = StringIO()
         
-        captured = capsys.readouterr()
-        output = captured.out
+        self.reporter.write_yaml_report(chains, output_buffer)
         
-        assert "Transaction Lock Invalidation Analysis Summary" in output
-        assert "Total invalidation events found: 1" in output
-        assert "Event 1:" in output
-        assert "Victim:" in output
-        assert "node_id=50005" in output
-        assert "Culprit:" in output
-        assert "node_id=50003" in output
-        assert "Table: /Root/database/test_schema/tt1" in output
+        output = output_buffer.getvalue()
         
-    def test_print_summary_empty_chains(self, capsys):
-        """Test printing summary with empty chains."""
-        chains = []
+        # Verify that YAML output was generated
+        assert output.strip() != ""
+        assert 'analysis_metadata:' in output
+        assert 'lock_invalidation_events:' in output
+        assert 'total_invalidation_events: 1' in output
         
-        self.reporter.print_summary(chains)
+        # Parse the YAML output
+        content = yaml.safe_load(output)
         
-        captured = capsys.readouterr()
-        output = captured.out
-        
-        assert "Transaction Lock Invalidation Analysis Summary" in output
-        assert "Total invalidation events found: 0" in output
-        assert "No lock invalidation events found in the log." in output
-        
-    def test_print_summary_multiple_chains(self, capsys):
-        """Test printing summary with multiple chains."""
-        # Create a second chain
-        second_chain = LockInvalidationChain(
-            victim_session_id="victim_session_2",
-            victim_trace_id="victim_trace_2",
-            lock_id="lock_id_2",
-            culprit_phy_tx_id="culprit_phy_tx_2",
-            culprit_trace_id="culprit_trace_2",
-            culprit_session_id="culprit_session_2",
-            victim_entry=self.victim_entry,
-            table_name="/Root/database/test_schema/tt2"
-        )
-        
-        chains = [self.sample_chain, second_chain]
-        
-        self.reporter.print_summary(chains)
-        
-        captured = capsys.readouterr()
-        output = captured.out
-        
-        assert "Total invalidation events found: 2" in output
-        assert "Event 1:" in output
-        assert "Event 2:" in output
-        assert "/Root/database/test_schema/tt1" in output
-        assert "/Root/database/test_schema/tt2" in output
+        # Ensure content is not None
+        assert content is not None
+        assert 'analysis_metadata' in content
+        assert 'lock_invalidation_events' in content
+        assert content['analysis_metadata']['total_invalidation_events'] == 1
+        assert len(content['lock_invalidation_events']) == 1
         
     def test_chain_serialization_with_queries(self):
         """Test that chains with queries are properly serialized."""
@@ -236,7 +210,9 @@ class TestYAMLReporter:
             tmp_path = tmp_file.name
             
         try:
-            self.reporter.write_yaml_report(chains, "test_log.log", tmp_path)
+            # Write to file by opening it and passing as file parameter
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                self.reporter.write_yaml_report(chains, f)
             
             with open(tmp_path, 'r', encoding='utf-8') as f:
                 content = yaml.safe_load(f)
@@ -279,7 +255,9 @@ class TestYAMLReporter:
             tmp_path = tmp_file.name
             
         try:
-            self.reporter.write_yaml_report(chains, "test_log.log", tmp_path)
+            # Write to file by opening it and passing as file parameter
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                self.reporter.write_yaml_report(chains, f)
             
             with open(tmp_path, 'r', encoding='utf-8') as f:
                 content = yaml.safe_load(f)

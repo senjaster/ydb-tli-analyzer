@@ -20,7 +20,8 @@ from log_parser import LogEntry
 class TestTLIAnalyzer:
     """Test cases for TLI Analyzer main functionality."""
     
-    def test_analyze_logs_with_file_input(self, capsys):
+    @patch('yaml_reporter.YAMLReporter.write_yaml_report')
+    def test_analyze_logs_with_file_input(self, mock_write_yaml):
         """Test analyze_logs function with file input."""
         # Create a temporary test file with sample log data
         test_data = """окт 22 10:54:51 ydb-static-node-3 ydbd[889]: 2025-10-22T07:54:51.433950Z :DATA_INTEGRITY DEBUG: Component: SessionActor,SessionId: ydb://session/3?node_id=50005&id=test,TraceId: 01k85ekrmy9tcyvnx2qvwdkcts,Type: Response,TxId: 01k85ekret8vjt70bq09a16h6q,Status: ABORTED,Issues: { message: "Transaction locks invalidated. Table: `/Root/database/test_schema_ca7eb8ed/tt1`" issue_code: 2001 severity: 1 }"""
@@ -33,17 +34,22 @@ class TestTLIAnalyzer:
             # Test file input
             analyze_logs(temp_file_path)
             
-            # Check that YAML was written to stdout
-            captured = capsys.readouterr()
-            assert 'analysis_metadata' in captured.out
-            assert 'lock_invalidation_events' in captured.out
+            # Check that write_yaml_report was called
+            mock_write_yaml.assert_called_once()
+            
+            # Check that chains were passed to the reporter
+            args, kwargs = mock_write_yaml.call_args
+            chains = args[0]
+            assert len(chains) == 1
+            assert chains[0].victim_session_id == "ydb://session/3?node_id=50005&id=test"
                 
         finally:
             # Clean up temporary files
             if os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
                 
-    def test_analyze_logs_with_stdin_input(self, capsys):
+    @patch('yaml_reporter.YAMLReporter.write_yaml_report')
+    def test_analyze_logs_with_stdin_input(self, mock_write_yaml):
         """Test analyze_logs function with stdin input."""
         test_data = """окт 22 10:54:51 ydb-static-node-3 ydbd[889]: 2025-10-22T07:54:51.433950Z :DATA_INTEGRITY DEBUG: Component: SessionActor,SessionId: ydb://session/3?node_id=50005&id=test,TraceId: 01k85ekrmy9tcyvnx2qvwdkcts,Type: Response,TxId: 01k85ekret8vjt70bq09a16h6q,Status: ABORTED,Issues: { message: "Transaction locks invalidated. Table: `/Root/database/test_schema_ca7eb8ed/tt1`" issue_code: 2001 severity: 1 }"""
         
@@ -51,10 +57,14 @@ class TestTLIAnalyzer:
         with patch('sys.stdin', StringIO(test_data)):
             analyze_logs(None)
             
-        # Check that YAML was written to stdout
-        captured = capsys.readouterr()
-        assert 'analysis_metadata' in captured.out
-        assert 'lock_invalidation_events' in captured.out
+        # Check that write_yaml_report was called
+        mock_write_yaml.assert_called_once()
+        
+        # Check that chains were passed to the reporter
+        args, kwargs = mock_write_yaml.call_args
+        chains = args[0]
+        assert len(chains) == 1
+        assert chains[0].victim_session_id == "ydb://session/3?node_id=50005&id=test"
                 
     def test_analyze_logs_empty_input(self, capsys):
         """Test analyze_logs function with empty input."""

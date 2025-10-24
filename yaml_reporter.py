@@ -31,13 +31,12 @@ class YAMLReporter:
     def __init__(self):
         pass
     
-    def generate_report(self, chains: List[LockInvalidationChain], log_file_path: str) -> Dict[str, Any]:
+    def generate_report(self, chains: List[LockInvalidationChain]) -> Dict[str, Any]:
         """Генерирует полный YAML отчет из проанализированных цепочек."""
         
         report = {
             'analysis_metadata': {
                 'generated_at': datetime.now().isoformat(),
-                'log_file': log_file_path,
                 'total_invalidation_events': len(chains),
             },
             'lock_invalidation_events': []
@@ -128,113 +127,18 @@ class YAMLReporter:
         
         return event
     
-    def write_yaml_report(self, chains: List[LockInvalidationChain],
-                         log_file_path: str, output_file: str) -> None:
-        """Записывает YAML отчет в файл."""
-        
-        report = self.generate_report(chains, log_file_path)
-        
-        try:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                yaml.dump(report, f, 
-                         default_flow_style=False, 
-                         allow_unicode=True,
-                         sort_keys=False,
-                         indent=2)
-            print(f"Report written to: {output_file}", file=sys.stderr)
-        except Exception as e:
-            raise Exception(f"Failed to write YAML report to {output_file}: {e}")
-    
-    def write_yaml_report_to_stdout(self, chains: List[LockInvalidationChain], log_file_path: str) -> None:
+    def write_yaml_report(self, chains: List[LockInvalidationChain], file=sys.stdout) -> None:
         """Записывает YAML отчет в stdout."""
         
-        report = self.generate_report(chains, log_file_path)
+        report = self.generate_report(chains)
         
         try:
             import yaml
-            yaml.dump(report, sys.stdout,
+            yaml.dump(report, file,
                      default_flow_style=False,
                      allow_unicode=True,
                      sort_keys=False,
                      indent=2)
         except Exception as e:
             raise Exception(f"Failed to write YAML report to stdout: {e}")
-    
-    def print_summary(self, chains: List[LockInvalidationChain]) -> None:
-        """Выводит сводку результатов анализа."""
-        
-        print(f"\n=== YDB Transaction Lock Invalidation Analysis Summary ===")
-        print(f"Total invalidation events found: {len(chains)}")
-        
-        if not chains:
-            print("No lock invalidation events found in the log.")
-            return
-        
-        print(f"\nEvents breakdown:")
-        
-        # Группирует по таблицам
-        tables = {}
-        for chain in chains:
-            table = chain.table_name or "Unknown"
-            tables[table] = tables.get(table, 0) + 1
-        
-        for table, count in tables.items():
-            print(f"  {table}: {count} events")
-        
-        print(f"\nFirst few events:")
-        for i, chain in enumerate(chains[:3], 1):
-            print(f"  Event {i}:")
-            print(f"    Timestamp: {chain.victim_entry.timestamp}")
-            print(f"    Table: {chain.table_name}")
-            print(f"    Victim: {self._format_session_short(chain.victim_session_id)}")
-            print(f"    Culprit: {self._format_session_short(chain.culprit_session_id)}")
-        
-        if len(chains) > 3:
-            print(f"    ... and {len(chains) - 3} more events")
-    
-    def print_summary_to_stderr(self, chains: List[LockInvalidationChain]) -> None:
-        """Выводит сводку результатов анализа в stderr."""
-        
-        print(f"\n=== YDB Transaction Lock Invalidation Analysis Summary ===", file=sys.stderr)
-        print(f"Total invalidation events found: {len(chains)}", file=sys.stderr)
-        
-        if not chains:
-            print("No lock invalidation events found in the log.", file=sys.stderr)
-            return
-        
-        print(f"\nEvents breakdown:", file=sys.stderr)
-        
-        # Группирует по таблицам
-        tables = {}
-        for chain in chains:
-            table = chain.table_name or "Unknown"
-            tables[table] = tables.get(table, 0) + 1
-        
-        for table, count in tables.items():
-            print(f"  {table}: {count} events", file=sys.stderr)
-        
-        print(f"\nFirst few events:", file=sys.stderr)
-        for i, chain in enumerate(chains[:3], 1):
-            print(f"  Event {i}:", file=sys.stderr)
-            print(f"    Timestamp: {chain.victim_entry.timestamp}", file=sys.stderr)
-            print(f"    Table: {chain.table_name}", file=sys.stderr)
-            print(f"    Victim: {self._format_session_short(chain.victim_session_id)}", file=sys.stderr)
-            print(f"    Culprit: {self._format_session_short(chain.culprit_session_id)}", file=sys.stderr)
-        
-        if len(chains) > 3:
-            print(f"    ... and {len(chains) - 3} more events", file=sys.stderr)
-    
-    def _format_session_short(self, session_id: str) -> str:
-        """Форматирует ID сессии для краткого отображения."""
-        if not session_id:
-            return "Unknown"
-        
-        # Извлекает только узел и короткий ID для читаемости
-        parts = session_id.split('?')
-        if len(parts) > 1:
-            node_part = parts[1].split('&')[0] if '&' in parts[1] else parts[1]
-            id_part = parts[1].split('id=')[1][:8] + "..." if 'id=' in parts[1] else ""
-            return f"{node_part} ({id_part})"
-        
-        return session_id[:50] + "..." if len(session_id) > 50 else session_id
-
+  

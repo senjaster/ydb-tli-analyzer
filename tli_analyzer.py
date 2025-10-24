@@ -92,11 +92,6 @@ def get_input_stream(input_source: Optional[str], sort_logs: bool):
 def analyze_logs(input_source: Optional[str], sort_logs: bool = False) -> None:
     """Анализирует лог (из файла или stdin) и генерирует отчет."""
     
-    if input_source:
-        source_description = input_source
-    else:
-        source_description = "stdin"
-    
     parser = LogParser()
     
     try:
@@ -114,7 +109,7 @@ def analyze_logs(input_source: Optional[str], sort_logs: bool = False) -> None:
     reporter = YAMLReporter()
     
     try:
-        reporter.write_yaml_report_to_stdout(chains, source_description)
+        reporter.write_yaml_report(chains)
     except Exception as e:
         raise Exception(f"Failed to generate report: {e}")
 
