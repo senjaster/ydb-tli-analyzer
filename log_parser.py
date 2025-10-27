@@ -52,7 +52,7 @@ class LogParser:
             'phy_tx_id': r'PhyTxId:\s*(\d+)',
             'lock_id': r'LockId:\s*(\d+)',
             'status': r'Status:\s*([^,\s]+)',
-            'query_text': r'QueryText:\s*([^,\s]+)',
+            'query_text': r'QueryText:\s*(.+),TxId:',
             'key': r'Key:\s*([^,\s]+)',
             'issues': r'Issues:\s*\{([^}]+)\}',
             'break_lock_id': r'BreakLocks:\s*\[([^\]]+)\]',
@@ -121,6 +121,9 @@ class LogParser:
                         # Список сломанных блокировок
                         lock_ids = [lock_id.strip() for lock_id in value.split()]
                         setattr(entry, field, lock_ids)
+                    elif field == 'query_text':
+                        unescaped_value = value.replace(r'\n','\n')
+                        setattr(entry, field, unescaped_value)
                     else:
                         setattr(entry, field, value)
         
