@@ -158,11 +158,11 @@ class ChainTracerSinglePass:
                 continue
                 
             if chain.culprit_phy_tx_id and chain.culprit_phy_tx_id != entry.phy_tx_id:
-                logging.warning(f"Chain for lock_id {lock_id} already has culprit_phy_tx_id {chain.culprit_phy_tx_id}, ignoring new phy_tx_id {entry.phy_tx_id}")
+                logging.warning(f"Chain for lock_id {lock_id} already has culprit_phy_tx_id {chain.culprit_phy_tx_id}, ignoring new phy_tx_id {entry.phy_tx_id}. Only one culprit is included in the report")
                 continue
                 
             if not entry.phy_tx_id:
-                logging.warning(f"Expected phy_tx_id in break_lock_id entry for lock_id {lock_id}, but not found")
+                logging.warning(f"Expected phy_tx_id in BreakLocks entry for lock_id {lock_id}, but not found")
                 continue
                 
             chain.culprit_phy_tx_id = entry.phy_tx_id
