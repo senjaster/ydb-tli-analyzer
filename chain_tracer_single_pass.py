@@ -76,8 +76,8 @@ class ChainTracerSinglePass:
         if entry.trace_id in self.chains and entry.status == "LOCKS_BROKEN" and entry.lock_id:
             self._fill_lock_id(entry)
         
-        # Если в строке есть интересующий нас break_locks - заполняем culprit_phy_tx_id в цепочке
-        if entry.break_locks:
+        # Если в строке есть интересующий нас break_lock_id - заполняем culprit_phy_tx_id в цепочке
+        if entry.break_lock_id:
             self._fill_culprit_phy_tx_id(entry)
         
         # Если в строке есть интересующий нас PhyTxId и TraceId не пустой - заполняем culprit_trace_id в цепочке
@@ -136,25 +136,25 @@ class ChainTracerSinglePass:
             logging.warning(f"Expected lock_id in LOCKS_BROKEN entry for trace_id {entry.trace_id}, but not found")
             return
             
-        # Пока что я не видело логов, в которых в строке с BREAK_LOCKS было бы несколько lock_id
+        # Пока что я не видело логов, в которых в строке с break_lock_id было бы несколько lock_id
         # Поэтому просто берем первый элемент списка - он же и единственный
 
         if len(chain.lock_id) > 1:
-            logging.warning(f"There are several LockId in BREAK_LOCKS row. This case is not handled.")
+            logging.warning(f"There are several LockId in break_lock_id row. This case is not handled.")
 
         first_lock_id = entry.lock_id[0] if isinstance(entry.lock_id, list) else entry.lock_id
         chain.lock_id = first_lock_id
         self.chains_by_lock_id[first_lock_id] = chain
     
     def _fill_culprit_phy_tx_id(self, entry: LogEntry):
-        """Заполняет culprit_phy_tx_id в цепочке по break_locks."""
-        if not entry.break_locks:
+        """Заполняет culprit_phy_tx_id в цепочке по break_lock_id."""
+        if not entry.break_lock_id:
             return
         
-        for lock_id in entry.break_locks:
+        for lock_id in entry.break_lock_id:
             chain = self.chains_by_lock_id.get(lock_id)
             if not chain:
-                # Это нормально - не все break_locks относятся к нашим цепочкам
+                # Это нормально - не все break_lock_id относятся к нашим цепочкам
                 continue
                 
             if chain.culprit_phy_tx_id and chain.culprit_phy_tx_id != entry.phy_tx_id:
@@ -162,7 +162,7 @@ class ChainTracerSinglePass:
                 continue
                 
             if not entry.phy_tx_id:
-                logging.warning(f"Expected phy_tx_id in break_locks entry for lock_id {lock_id}, but not found")
+                logging.warning(f"Expected phy_tx_id in break_lock_id entry for lock_id {lock_id}, but not found")
                 continue
                 
             chain.culprit_phy_tx_id = entry.phy_tx_id

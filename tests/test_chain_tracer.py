@@ -49,7 +49,7 @@ class TestChainTracer:
                 log_level="INFO",
                 message_type="DATA_INTEGRITY",
                 phy_tx_id="844424930570467",
-                break_locks=["844424930570466", "562949953837886"],
+                break_lock_id=["844424930570466", "562949953837886"],
                 raw_line="test line 3"
             ),
             LogEntry(
@@ -131,7 +131,7 @@ class TestChainTracer:
                 log_level="DEBUG",
                 message_type="BREAK",
                 phy_tx_id="67890",
-                break_locks=["12345"],
+                break_lock_id=["12345"],
                 raw_line="test line"
             ),
             # Culprit transaction
@@ -280,7 +280,7 @@ class TestChainTracer:
             log_level="DEBUG",
             message_type="BREAK",
             phy_tx_id="67890",
-            break_locks=["12345"],
+            break_lock_id=["12345"],
             raw_line="test line"
         ))
         

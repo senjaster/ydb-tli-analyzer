@@ -26,7 +26,7 @@ class LogEntry:
     query_text: Optional[str] = None
     key: Optional[str] = None
     issues: Optional[str] = None
-    break_locks: Optional[List[str]] = None
+    break_lock_id: Optional[List[str]] = None
     tx_id: Optional[str] = None
     query_action: Optional[str] = None
     query_type: Optional[str] = None
@@ -48,7 +48,7 @@ class LogParser:
             'query_text': r'QueryText:\s*([^,\s]+)',
             'key': r'Key:\s*([^,\s]+)',
             'issues': r'Issues:\s*\{([^}]+)\}',
-            'break_locks': r'BreakLocks:\s*\[([^\]]+)\]',
+            'break_lock_id': r'BreakLocks:\s*\[([^\]]+)\]',
             'component': r'Component:\s*([^,\s]+)',
             'tx_id': r'TxId:\s*([^,\s]+)',
             'query_action': r'QueryAction:\s*([^,\s]+)',
@@ -104,7 +104,7 @@ class LogParser:
                 match = pattern.search(content)
                 if match:
                     value = match.group(1).strip()
-                    if field == 'break_locks':
+                    if field == 'break_lock_id':
                         # Список сломанных блокировок
                         lock_ids = [lock_id.strip() for lock_id in value.split()]
                         setattr(entry, field, lock_ids)

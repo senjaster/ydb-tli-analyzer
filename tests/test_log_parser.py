@@ -58,7 +58,7 @@ class TestLogParser:
         assert entry.timestamp == "2025-10-22T07:54:51.433950Z"
         assert entry.raw_line == sample_line
         
-    def test_parse_break_locks_line(self):
+    def test_parse_break_lock_id_line(self):
         """Test parsing a line with BreakLocks information."""
         sample_line = 'окт 22 13:08:53 ydb-static-node-1 ydbd[844]: 2025-10-22T10:08:53.391599Z :DATA_INTEGRITY INFO: Component: DataShard,Type: Locks,TabletId: 72075186224047631,PhyTxId: 562949953837901,BreakLocks: [562949953837900 844424930570469 ]'
         
@@ -72,7 +72,7 @@ class TestLogParser:
         assert entry.message_type == "DATA_INTEGRITY"
         assert entry.component == "DataShard"
         assert entry.phy_tx_id == "562949953837901"
-        assert entry.break_locks == ["562949953837900", "844424930570469"]
+        assert entry.break_lock_id == ["562949953837900", "844424930570469"]
         assert entry.timestamp == "2025-10-22T10:08:53.391599Z"
         
     def test_parse_locks_broken_status_line(self):
@@ -108,7 +108,7 @@ class TestLogParser:
         # Check that we have some entries with BreakLocks
         break_lock_entries = [
             entry for entry in entries
-            if entry.break_locks and len(entry.break_locks) > 0
+            if entry.break_lock_id and len(entry.break_lock_id) > 0
         ]
         assert len(break_lock_entries) > 0
             
@@ -142,7 +142,7 @@ class TestLogParser:
         assert entry.status is None
         assert entry.query_text is None
         assert entry.issues is None
-        assert entry.break_locks is None
+        assert entry.break_lock_id is None
         assert entry.tx_id is None
         assert entry.query_action is None
         assert entry.query_type is None
@@ -171,7 +171,7 @@ invalid line that should be skipped
         # Check second entry (break locks)
         second_entry = entries[1]
         assert second_entry.node == "ydb-static-node-1"
-        assert second_entry.break_locks == ["562949953837900", "844424930570469"]
+        assert second_entry.break_lock_id == ["562949953837900", "844424930570469"]
         
         # Check third entry (locks broken status)
         third_entry = entries[2]
