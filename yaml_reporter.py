@@ -9,6 +9,7 @@ import sys
 from typing import List, Dict, Any
 from datetime import datetime
 from chain_models import LockInvalidationChain
+from datetime import datetime
 
 
 class QueryTextStr(str):
@@ -41,8 +42,10 @@ class YAMLReporter:
             },
             'lock_invalidation_events': []
         }
+
+        sorted_chains = sorted(chains, key=lambda x:datetime.fromisoformat(x.victim_entry.timestamp))
         
-        for i, chain in enumerate(chains, 1):
+        for i, chain in enumerate(sorted_chains, 1):
             event = self._format_chain_as_event(chain, i)
             report['lock_invalidation_events'].append(event)
         
