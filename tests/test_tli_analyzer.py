@@ -90,6 +90,9 @@ class TestTLIAnalyzer:
         args, kwargs = mock_analyze.call_args
         assert args[0] == 'test.log'  # input_source
         assert args[1] == True  # sort_logs (default is now True)
+        # args[2] should be LogFormat.SYSTEMD (default)
+        from log_parser import LogFormat
+        assert args[2] == LogFormat.SYSTEMD
         
     @patch('sys.argv', ['tli_analyzer.py'])
     @patch('sys.stdin.isatty')
@@ -105,6 +108,9 @@ class TestTLIAnalyzer:
         args, kwargs = mock_analyze.call_args
         assert args[0] is None  # input_source (stdin)
         assert args[1] == True  # sort_logs (default is now True)
+        # args[2] should be LogFormat.SYSTEMD (default)
+        from log_parser import LogFormat
+        assert args[2] == LogFormat.SYSTEMD
         
     @patch('sys.argv', ['tli_analyzer.py'])
     @patch('sys.stdin.isatty')
@@ -142,6 +148,9 @@ class TestTLIAnalyzer:
         args, kwargs = mock_analyze.call_args
         assert args[0] is None  # input_source (stdin)
         assert args[1] == False  # sort_logs (disabled with --no-sort)
+        # args[2] should be LogFormat.SYSTEMD (default)
+        from log_parser import LogFormat
+        assert args[2] == LogFormat.SYSTEMD
         
     def test_analyze_logs_no_verbose_output(self, capsys):
         """Test analyze_logs function produces no verbose output."""
@@ -187,6 +196,9 @@ class TestTLIAnalyzer:
         args, kwargs = mock_analyze.call_args
         assert args[0] is None  # input_source (stdin)
         assert args[1] == False  # sort_logs (disabled with --no-sort)
+        # args[2] should be LogFormat.SYSTEMD (default)
+        from log_parser import LogFormat
+        assert args[2] == LogFormat.SYSTEMD
 
 
 if __name__ == '__main__':

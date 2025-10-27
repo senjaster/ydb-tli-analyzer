@@ -4,14 +4,21 @@ import subprocess
 import shutil
 from typing import Iterator, TextIO
 
+from log_parser import LogFormat
 
-def sort_log_stream(input_stream: TextIO) -> Iterator[str]:
+
+def sort_log_stream(input_stream: TextIO, format: LogFormat = LogFormat.SYSTEMD) -> Iterator[str]:
     """Сортирует строки лога в обратном порядке используя sort
     """
     try:
-        # Правильное время находится на 6 месте, поэтому -k6,6
+        if format == LogFormat.SYSTEMD:
+            # В логах в формате systemd правильное время находится на 6 месте, поэтому -k6,6
+            ts_pos = 6
+        else:
+            ts_pos = 1
+
         process = subprocess.Popen(
-            ['sort', '-k6,6', '-r'],
+            ['sort', f'-k{ts_pos},{ts_pos}', '-r'],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

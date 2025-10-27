@@ -14,7 +14,7 @@ import sys
 import os
 from typing import List, Optional
 
-from log_parser import LogParser, LogEntry
+from log_parser import LogParser, LogEntry, LogFormat
 from chain_tracer_single_pass import ChainTracerSinglePass
 from chain_models import LockInvalidationChain
 from yaml_reporter import YAMLReporter
@@ -41,11 +41,17 @@ Examples:
     )
     
     parser.add_argument(
-        '--log-file', '-f',
+        '--log-file',
         help='Path to the YDB log file to analyze (if not provided, reads from stdin)'
     )
     
-    
+    parser.add_argument(
+        '--log-format', '-f',
+        help='Specify the input log format. "systemd" for logs from journalctl (default), "raw" for direct ydbd log files',
+        choices=['systemd', 'raw'],
+        default='systemd'
+    )
+
     parser.add_argument(
         '--no-sort',
         action='store_true',
@@ -67,35 +73,37 @@ Examples:
             print("Use --help for usage examples.", file=sys.stderr)
             sys.exit(1)
         input_source = None  # Will use stdin
+
+    format = LogFormat(args.log_format or 'systemd')
     
     try:
-        analyze_logs(input_source, not args.no_sort)
+        analyze_logs(input_source, not args.no_sort, format)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
 
-def get_input_stream(input_source: Optional[str], sort_logs: bool):
+def get_input_stream(input_source: Optional[str], sort_logs: bool, format: LogFormat):
     if input_source:
         # File input
         file_stream = open(input_source, 'r', encoding='utf-8')
         if sort_logs:
-            return sort_log_stream(file_stream)
+            return sort_log_stream(file_stream, format)
         return file_stream
     else:
         # Stdin input
         if sort_logs:
-            return sort_log_stream(sys.stdin)
+            return sort_log_stream(sys.stdin, format)
         return sys.stdin
 
 
-def analyze_logs(input_source: Optional[str], sort_logs: bool = True) -> None:
+def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: LogFormat = LogFormat.SYSTEMD) -> None:
     """Анализирует лог (из файла или stdin) и генерирует отчет."""
     
-    parser = LogParser()
+    parser = LogParser(format)
     
     try:
-        input_stream = get_input_stream(input_source, sort_logs)
+        input_stream = get_input_stream(input_source, sort_logs, format)
         log_entries_stream = parser.parse_stream(input_stream)
         tracer = ChainTracerSinglePass(log_entries_stream)
         chains = tracer.find_all_invalidation_chains()

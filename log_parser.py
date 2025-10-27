@@ -8,6 +8,7 @@ import re
 from typing import Dict, Optional, List, Iterator, TextIO
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 
 @dataclass
@@ -34,10 +35,16 @@ class LogEntry:
     raw_line: str = ""
     
 
+class LogFormat(StrEnum):
+    SYSTEMD = 'systemd'  # from journalctl
+    RAW = 'raw'  # raw ydbd logs written to file
+
 class LogParser:
     """Парсер лога"""
     
-    def __init__(self):
+    def __init__(self, format: LogFormat = LogFormat.SYSTEMD):
+        self.format = format
+
         self.patterns = {
             'timestamp': r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)',  # UTC !!!
             'session_id': r'SessionId:\s*([^,\s]+)',
@@ -65,18 +72,24 @@ class LogParser:
         if not line.strip():
             return None
             
-        # Извлекаем обязательные поля, которые должны быть в любой строке
-        # Формат: date time node process[pid]: timestamp :MESSAGE_TYPE LEVEL: ...
-        # Дату, указанную в начале строки игнорируем - там нет миллисекунд
-        basic_match = re.match(
-            r'\w+\s+\d+\s+\d+:\d+:\d+\s+([^\s]+)\s+([^[]+)\[(\d+)\]:\s*(.+)',
-            line
-        )
-        
-        if not basic_match:
-            return None
+
+        if self.format == LogFormat.SYSTEMD:
+            # Извлекаем обязательные поля, которые должны быть в любой строке
+            # Формат: date time node process[pid]: timestamp :MESSAGE_TYPE LEVEL: ...
+            # Дату, указанную в начале строки игнорируем - там нет миллисекунд
+            basic_match = re.match(
+                r'\w+\s+\d+\s+\d+:\d+:\d+\s+([^\s]+)\s+([^[]+)\[(\d+)\]:\s*(.+)',
+                line
+            )
             
-        node, process, pid, content = basic_match.groups()
+            if not basic_match:
+                return None
+                
+            node, process, pid, content = basic_match.groups()
+        else:
+            # В "сырых" логах нет имени процесса, пида и прочего
+            # Строка начинается прямо с timestamp в UTC
+            node, process, pid, content = None, None, None, line
         
         level_match = re.search(r':(\w+)\s+(\w+):', content)
         if not level_match:
