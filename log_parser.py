@@ -21,7 +21,7 @@ class LogEntry:
     session_id: Optional[str] = None
     trace_id: Optional[str] = None
     phy_tx_id: Optional[str] = None
-    lock_id: Optional[str] = None
+    lock_id: Optional[List[str]] = None
     status: Optional[str] = None
     query_text: Optional[str] = None
     key: Optional[str] = None
@@ -95,15 +95,21 @@ class LogParser:
         
         # Извлекаем остальные поля
         for field, pattern in self.compiled_patterns.items():
-            match = pattern.search(content)
-            if match:
-                value = match.group(1).strip()
-                if field == 'break_locks':
-                    # Список сломанных блокировок
-                    lock_ids = [lock_id.strip() for lock_id in value.split()]
+            if field == 'lock_id':
+                # Специальная обработка для множественных LockId
+                lock_ids = pattern.findall(content)
+                if lock_ids:
                     setattr(entry, field, lock_ids)
-                else:
-                    setattr(entry, field, value)
+            else:
+                match = pattern.search(content)
+                if match:
+                    value = match.group(1).strip()
+                    if field == 'break_locks':
+                        # Список сломанных блокировок
+                        lock_ids = [lock_id.strip() for lock_id in value.split()]
+                        setattr(entry, field, lock_ids)
+                    else:
+                        setattr(entry, field, value)
         
         return entry
     

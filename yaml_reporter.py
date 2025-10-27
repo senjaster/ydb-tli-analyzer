@@ -8,7 +8,7 @@ import yaml
 import sys
 from typing import List, Dict, Any
 from datetime import datetime
-from chain_tracer import LockInvalidationChain
+from chain_models import LockInvalidationChain
 
 
 class QueryTextStr(str):

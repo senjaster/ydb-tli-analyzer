@@ -14,7 +14,7 @@ class TraceInfo:
     query_text: Optional[str] = None
     tx_id: Optional[str] = None
     session_id: Optional[str] = None
-    lock_id: Optional[str] = None  # For LOCKS_BROKEN entries
+    lock_id: Optional[List[str]] = None  # For LOCKS_BROKEN entries
     representative_entry: Optional[LogEntry] = None  # First entry with session_id
 
 

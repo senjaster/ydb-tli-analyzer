@@ -136,8 +136,15 @@ class ChainTracerSinglePass:
             logging.warning(f"Expected lock_id in LOCKS_BROKEN entry for trace_id {entry.trace_id}, but not found")
             return
             
-        chain.lock_id = entry.lock_id
-        self.chains_by_lock_id[entry.lock_id] = chain
+        # Пока что я не видело логов, в которых в строке с BREAK_LOCKS было бы несколько lock_id
+        # Поэтому просто берем первый элемент списка - он же и единственный
+
+        if len(chain.lock_id) > 1:
+            logging.warning(f"There are several LockId in BREAK_LOCKS row. This case is not handled.")
+
+        first_lock_id = entry.lock_id[0] if isinstance(entry.lock_id, list) else entry.lock_id
+        chain.lock_id = first_lock_id
+        self.chains_by_lock_id[first_lock_id] = chain
     
     def _fill_culprit_phy_tx_id(self, entry: LogEntry):
         """Заполняет culprit_phy_tx_id в цепочке по break_locks."""
@@ -150,7 +157,7 @@ class ChainTracerSinglePass:
                 # Это нормально - не все break_locks относятся к нашим цепочкам
                 continue
                 
-            if chain.culprit_phy_tx_id:
+            if chain.culprit_phy_tx_id and chain.culprit_phy_tx_id != entry.phy_tx_id:
                 logging.warning(f"Chain for lock_id {lock_id} already has culprit_phy_tx_id {chain.culprit_phy_tx_id}, ignoring new phy_tx_id {entry.phy_tx_id}")
                 continue
                 
@@ -168,7 +175,7 @@ class ChainTracerSinglePass:
             logging.warning(f"Expected to find chain for culprit phy_tx_id {entry.phy_tx_id}, but not found")
             return
             
-        if chain.culprit_trace_id:
+        if chain.culprit_trace_id and chain.culprit_trace_id != entry.trace_id:
             logging.warning(f"Chain for phy_tx_id {entry.phy_tx_id} already has culprit_trace_id {chain.culprit_trace_id}, ignoring new trace_id {entry.trace_id}")
             return
             

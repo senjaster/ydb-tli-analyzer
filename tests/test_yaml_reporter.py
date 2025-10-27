@@ -8,7 +8,7 @@ import os
 import tempfile
 import yaml
 from log_parser import LogEntry
-from chain_tracer import LockInvalidationChain
+from chain_models import LockInvalidationChain
 from yaml_reporter import YAMLReporter
 
 

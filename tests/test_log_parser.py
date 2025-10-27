@@ -227,3 +227,42 @@ Invalid line 3"""
         assert entry.log_level == "DEBUG"
         assert entry.session_id == "test"
         assert entry.trace_id == "test123"
+        
+    def test_parse_multiple_lock_ids(self):
+        """Test parsing a line with multiple LockId values."""
+        sample_line = 'окт 27 10:12:38 ydb-static-node-3 ydbd[102832]: 2025-10-27T07:12:38.009558Z :DATA_INTEGRITY INFO: Component: Executer,Type: InputActorResult,TraceId: Empty,PhyTxId: 281474977337937,Locks: [LockId: 281474977337932 DataShard: 72075186224047556 Generation: 4 Counter: 1026 SchemeShard: 72075186224037897 PathId: 96 LockId: 281474977337932 DataShard: 72075186224047563 Generation: 4 Counter: 1216 SchemeShard: 72075186224037897 PathId: 96 ],'
+        
+        entry = self.parser.parse_line(sample_line)
+        
+        assert entry is not None
+        assert isinstance(entry, LogEntry)
+        assert entry.node == "ydb-static-node-3"
+        assert entry.process == "ydbd[102832]"
+        assert entry.log_level == "INFO"
+        assert entry.message_type == "DATA_INTEGRITY"
+        assert entry.component == "Executer"
+        assert entry.phy_tx_id == "281474977337937"
+        assert entry.timestamp == "2025-10-27T07:12:38.009558Z"
+        
+        # Check that multiple lock IDs are parsed correctly
+        assert entry.lock_id is not None
+        assert isinstance(entry.lock_id, list)
+        assert len(entry.lock_id) == 2
+        assert entry.lock_id == ["281474977337932", "281474977337932"]
+        
+    def test_parse_single_lock_id_as_list(self):
+        """Test that single LockId is still parsed as a list."""
+        sample_line = 'окт 22 10:54:51 ydb-static-node-3 ydbd[889]: 2025-10-22T07:54:51.428479Z :DATA_INTEGRITY INFO: Component: Executer,Type: Response,State: Execute,TraceId: 01k85ekrmy9tcyvnx2qvwdkcts,PhyTxId: 562949953837887,ShardId: 72075186224047627,Locks: [LockId: 562949953837886 DataShard: 72075186224047627 Generation: 1 Counter: 2 SchemeShard: 72075186224037897 PathId: 131 HasWrites: false ],Status: LOCKS_BROKEN,Issues: Empty'
+        
+        entry = self.parser.parse_line(sample_line)
+        
+        assert entry is not None
+        assert isinstance(entry, LogEntry)
+        assert entry.status == "LOCKS_BROKEN"
+        assert entry.phy_tx_id == "562949953837887"
+        
+        # Check that single lock ID is parsed as a list
+        assert entry.lock_id is not None
+        assert isinstance(entry.lock_id, list)
+        assert len(entry.lock_id) == 1
+        assert entry.lock_id == ["562949953837886"]

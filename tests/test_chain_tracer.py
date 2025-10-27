@@ -39,7 +39,7 @@ class TestChainTracer:
                 trace_id="01k85ekrmy9tcyvnx2qvwdkcts",
                 phy_tx_id="562949953837887",
                 status="LOCKS_BROKEN",
-                lock_id="562949953837886",
+                lock_id=["562949953837886"],
                 raw_line="test line 2"
             ),
             LogEntry(
@@ -120,7 +120,7 @@ class TestChainTracer:
                 message_type="LOCKS",
                 trace_id="victim_trace",
                 status="LOCKS_BROKEN",
-                lock_id="12345",
+                lock_id=["12345"],
                 raw_line="test line"
             ),
             # Break locks event
@@ -268,7 +268,7 @@ class TestChainTracer:
             message_type="LOCKS",
             trace_id="victim_trace",
             status="LOCKS_BROKEN",
-            lock_id="12345",
+            lock_id=["12345"],
             raw_line="test line"
         ))
         
