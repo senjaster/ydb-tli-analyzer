@@ -133,6 +133,7 @@ class ChainTracerSinglePass:
         )
         
         self.chains[entry.trace_id] = chain
+        logging.info(f"{entry.trace_id} Created new TLI chain for table {table_name}")
     
     def _fill_lock_id(self, entry: LogEntry):
         """Заполняет lock_id в цепочке."""
@@ -158,6 +159,7 @@ class ChainTracerSinglePass:
         first_lock_id = entry.lock_id[0] if isinstance(entry.lock_id, list) else entry.lock_id
         chain.lock_id = first_lock_id
         self.chains_by_lock_id[first_lock_id] = chain
+        logging.info(f"{chain.victim_trace_id} Found lock_id {first_lock_id}")
 
     def _fill_victim_phy_tx_id(self, entry: LogEntry):
         """Заполняет victim_phy_tx_id в цепочке."""
@@ -175,6 +177,7 @@ class ChainTracerSinglePass:
             return
                 
         chain.victim_phy_tx_id = entry.phy_tx_id
+        logging.info(f"{chain.victim_trace_id} Found victim_phy_tx_id {entry.phy_tx_id}")
 
     def _fill_culprit_phy_tx_id(self, entry: LogEntry):
         """Заполняет culprit_phy_tx_id в цепочке по break_lock_id."""
@@ -194,7 +197,7 @@ class ChainTracerSinglePass:
             if chain.victim_phy_tx_id and chain.victim_phy_tx_id == entry.phy_tx_id:
                 # Почему-то бывает что транзакция как-бы сама ломает свой же лок. Игнорим
                 logging.debug(f"Chain for LockId {lock_id} already has victim PhyTxId {chain.victim_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}. It's a self-break!")
-                continue 
+                continue
                 
             if chain.culprit_phy_tx_id and chain.culprit_phy_tx_id != entry.phy_tx_id:
                 logging.warning(f"Chain for LockId {lock_id} already has culprit PhyTxId {chain.culprit_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}. Only one culprit is included in the report")
@@ -202,6 +205,7 @@ class ChainTracerSinglePass:
                 
             chain.culprit_phy_tx_id = entry.phy_tx_id
             self.chains_by_culprit_phy_tx_id[entry.phy_tx_id] = chain
+            logging.info(f"{chain.victim_trace_id} Found culprit_phy_tx_id {entry.phy_tx_id} for lock_id {lock_id}")
     
     def _fill_culprit_trace_id(self, entry: LogEntry):
         """Заполняет culprit_trace_id в цепочке."""
@@ -221,6 +225,7 @@ class ChainTracerSinglePass:
         chain.culprit_trace_id = entry.trace_id
         # Добавляем culprit trace_id в целевые для дальнейшего поиска
         self.chains_by_culprit_trace_id[entry.trace_id] = chain
+        logging.info(f"{chain.victim_trace_id} Found culprit_trace_id {entry.trace_id}")
     
     def _fill_culprit_session_id(self, entry: LogEntry):
         """Заполняет culprit_session_id в цепочке."""
@@ -239,6 +244,7 @@ class ChainTracerSinglePass:
             return
             
         chain.culprit_session_id = entry.session_id
+        logging.info(f"{chain.victim_trace_id} Found culprit_session_id {entry.session_id}")
     
     def _fill_culprit_tx_id(self, entry: LogEntry):
         """Заполняет culprit_tx_id в цепочке."""
@@ -262,6 +268,7 @@ class ChainTracerSinglePass:
             return
             
         chain.culprit_tx_id = entry.tx_id
+        logging.info(f"{chain.victim_trace_id} Found culprit_tx_id {entry.tx_id}")
     
     def _collect_session_tx(self, entry: LogEntry):
         """Запоминает, какая транзакция сейчас в сессии"""
@@ -283,7 +290,6 @@ class ChainTracerSinglePass:
                 inferred_tx = self._session_current_tx.get(entry.session_id)
                 if inferred_tx:
                     self.queries_by_tx[inferred_tx].append(entry)
-                    
                 else:
                     logging.warning(f"Query has no TxId and unable to infer TxIf from SessionId {entry.session_id}")
             else:
@@ -319,6 +325,8 @@ class ChainTracerSinglePass:
     
     def _validate_chains(self):
         """Проверяет, что все цепочки имеют все необходимые поля заполненными."""
+        incomplete_count = 0
+        
         for chain in self.chains.values():
             missing_fields = []
             
@@ -352,8 +360,10 @@ class ChainTracerSinglePass:
             
             # Логируем предупреждения для любых отсутствующих полей
             if missing_fields:
+                incomplete_count += 1
                 logging.warning(f"Incomplete chain for victim TraceId {chain.victim_trace_id} - missing fields: {', '.join(missing_fields)}")
-    
+
+        logging.info(f"Chain analysis complete: found {len(self.chains)} TLI chains, {incomplete_count} incomplete")
     
     def _extract_table_name(self, issues: Optional[str]) -> Optional[str]:
         """Извлекает имя таблицы из описания TLI."""
