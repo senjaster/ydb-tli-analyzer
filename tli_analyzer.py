@@ -12,6 +12,7 @@
 import argparse
 import sys
 import os
+import logging
 from typing import List, Optional
 
 from log_parser import LogParser, LogEntry, LogFormat
@@ -71,7 +72,17 @@ Examples:
         default='yaml'
     )
     
+    parser.add_argument(
+        '-v', '--verbose',
+        action='count',
+        default=0,
+        help='Increase verbosity level. Use -v for INFO, -vv for DEBUG, -vvv for more detailed DEBUG messages'
+    )
+    
     args = parser.parse_args()
+    
+    # Configure logging based on verbosity level
+    _configure_logging(args.verbose)
     
     # Validate input - either file or stdin
     if args.log_file:
@@ -94,6 +105,38 @@ Examples:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def _configure_logging(verbosity: int) -> None:
+    """Configure logging based on verbosity level."""
+    if verbosity == 0:
+        # Default: only show warnings and errors
+        level = logging.WARNING
+    elif verbosity == 1:
+        # -v: show info messages
+        level = logging.INFO
+    elif verbosity == 2:
+        # -vv: show debug messages
+        level = logging.DEBUG
+    else:
+        # -vvv and beyond: show all debug messages with more detail
+        level = logging.DEBUG
+    
+    # Configure the root logger
+    logging.basicConfig(
+        level=level,
+        format='%(levelname)s: %(message)s',
+        stream=sys.stderr
+    )
+    
+    # For very verbose mode, show more detailed format
+    if verbosity >= 3:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            stream=sys.stderr,
+            force=True  # Override previous configuration
+        )
 
 
 def get_input_stream(input_source: Optional[str], sort_logs: bool, format: LogFormat):

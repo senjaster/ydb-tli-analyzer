@@ -80,15 +80,15 @@ class ChainTracerSinglePass:
         # Если в строке есть Transaction locks invalidated - создаем новую цепочку
         if self._is_transaction_locks_invalidated(entry):
             self._create_new_chain(entry)
-        
-        # Если в строке есть интересующий нас TraceId (victim) и LOCKS_BROKEN - заполняем lock_id
-        if entry.trace_id in self.chains and entry.status == "LOCKS_BROKEN" and entry.lock_id:
-            self._fill_lock_id(entry)
-        
+
         # Если в строке есть интересующий нас TraceId (victim)  и LOCKS_BROKEN - заполняем phy_tx_id для жертвы
         if entry.trace_id in self.chains and entry.status == "LOCKS_BROKEN" and entry.phy_tx_id:
             self._fill_victim_phy_tx_id(entry)
 
+        # Если в строке есть интересующий нас TraceId (victim) и LOCKS_BROKEN - заполняем lock_id
+        if entry.trace_id in self.chains and entry.status == "LOCKS_BROKEN" and entry.lock_id:
+            self._fill_lock_id(entry)
+        
         # Если в строке есть интересующий нас break_lock_id - заполняем culprit_phy_tx_id в цепочке
         if entry.break_lock_id:
             self._fill_culprit_phy_tx_id(entry)
@@ -133,7 +133,7 @@ class ChainTracerSinglePass:
         )
         
         self.chains[entry.trace_id] = chain
-        logging.info(f"{entry.trace_id} Created new TLI chain for table {table_name}")
+        logging.info(f"{chain.victim_trace_id} - Created new TLI chain for table {table_name}")
     
     def _fill_lock_id(self, entry: LogEntry):
         """Заполняет lock_id в цепочке."""
@@ -143,23 +143,25 @@ class ChainTracerSinglePass:
             return
         
         if chain.lock_id:
-            logging.warning(f"Chain for TraceId {entry.trace_id} already has LockId {chain.lock_id}, ignoring new LockId {entry.lock_id}")
+            logging.warning(f"{chain.victim_trace_id} - Chain for TraceId {entry.trace_id} already has LockId {chain.lock_id}, ignoring new LockId {entry.lock_id}")
             return
             
         if not entry.lock_id:
-            logging.warning(f"Expected LockId in LOCKS_BROKEN entry for TraceId {entry.trace_id}, but not found")
+            logging.warning(f"{chain.victim_trace_id} - Expected LockId in LOCKS_BROKEN entry for TraceId {entry.trace_id}, but not found")
             return
             
         # Пока что я не видел логов, в которых в строке с break_lock_id было бы несколько lock_id
         # Поэтому просто берем первый элемент списка - он же и единственный
 
         if len(chain.lock_id) > 1:
-            logging.warning(f"There are several LockId in BreakLocks row. This case is not handled.")
+            logging.warning(f"{chain.victim_trace_id} - There are several LockId in BreakLocks row. This case is not handled.")
 
         first_lock_id = entry.lock_id[0] if isinstance(entry.lock_id, list) else entry.lock_id
-        chain.lock_id = first_lock_id
-        self.chains_by_lock_id[first_lock_id] = chain
-        logging.info(f"{chain.victim_trace_id} Found lock_id {first_lock_id}")
+        # Only log if we're actually setting a new value (chain.lock_id was empty)
+        if not chain.lock_id:
+            chain.lock_id = first_lock_id
+            self.chains_by_lock_id[first_lock_id] = chain
+            logging.info(f"{chain.victim_trace_id} - Found lock_id {first_lock_id}")
 
     def _fill_victim_phy_tx_id(self, entry: LogEntry):
         """Заполняет victim_phy_tx_id в цепочке."""
@@ -169,15 +171,17 @@ class ChainTracerSinglePass:
             return
         
         if chain.victim_phy_tx_id:
-            logging.warning(f"Chain for TraceId {entry.trace_id} already has victim PhyTxId {chain.victim_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}")
+            logging.warning(f"{chain.victim_trace_id} - Chain for TraceId {entry.trace_id} already has victim PhyTxId {chain.victim_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}")
             return
             
         if not entry.phy_tx_id:
-            logging.warning(f"Expected PhyTxId in LOCKS_BROKEN entry for TraceId {entry.trace_id}, but not found")
+            logging.warning(f"{chain.victim_trace_id} - Expected PhyTxId in LOCKS_BROKEN entry for TraceId {entry.trace_id}, but not found")
             return
-                
-        chain.victim_phy_tx_id = entry.phy_tx_id
-        logging.info(f"{chain.victim_trace_id} Found victim_phy_tx_id {entry.phy_tx_id}")
+        
+        # Only log if we're actually setting a new value (chain.victim_phy_tx_id was empty)
+        if not chain.victim_phy_tx_id:
+            chain.victim_phy_tx_id = entry.phy_tx_id
+            logging.info(f"{chain.victim_trace_id} - Found victim_phy_tx_id {entry.phy_tx_id}")
 
     def _fill_culprit_phy_tx_id(self, entry: LogEntry):
         """Заполняет culprit_phy_tx_id в цепочке по break_lock_id."""
@@ -185,7 +189,7 @@ class ChainTracerSinglePass:
             return
         
         if not entry.phy_tx_id:
-            logging.warning(f"Expected PhyTxId in BreakLocks entry for LockId {lock_id}, but not found")
+            logging.warning(f"Expected PhyTxId in BreakLocks entry, but not found")
             return
 
         for lock_id in entry.break_lock_id:
@@ -196,16 +200,18 @@ class ChainTracerSinglePass:
 
             if chain.victim_phy_tx_id and chain.victim_phy_tx_id == entry.phy_tx_id:
                 # Почему-то бывает что транзакция как-бы сама ломает свой же лок. Игнорим
-                logging.debug(f"Chain for LockId {lock_id} already has victim PhyTxId {chain.victim_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}. It's a self-break!")
+                # logging.(f"{chain.victim_trace_id} - Chain for LockId {lock_id} already has victim PhyTxId {chain.victim_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}. It's a self-break!")
                 continue
                 
             if chain.culprit_phy_tx_id and chain.culprit_phy_tx_id != entry.phy_tx_id:
-                logging.warning(f"Chain for LockId {lock_id} already has culprit PhyTxId {chain.culprit_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}. Only one culprit is included in the report")
+                logging.warning(f"{chain.victim_trace_id} - Chain for LockId {lock_id} already has culprit PhyTxId {chain.culprit_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}. Only one culprit is included in the report")
                 continue
-                
-            chain.culprit_phy_tx_id = entry.phy_tx_id
-            self.chains_by_culprit_phy_tx_id[entry.phy_tx_id] = chain
-            logging.info(f"{chain.victim_trace_id} Found culprit_phy_tx_id {entry.phy_tx_id} for lock_id {lock_id}")
+            
+            # Only log if we're actually setting a new value (chain.culprit_phy_tx_id was empty)
+            if not chain.culprit_phy_tx_id:
+                chain.culprit_phy_tx_id = entry.phy_tx_id
+                self.chains_by_culprit_phy_tx_id[entry.phy_tx_id] = chain
+                logging.info(f"{chain.victim_trace_id} - Found culprit_phy_tx_id {entry.phy_tx_id} for lock_id {lock_id}")
     
     def _fill_culprit_trace_id(self, entry: LogEntry):
         """Заполняет culprit_trace_id в цепочке."""
@@ -215,17 +221,19 @@ class ChainTracerSinglePass:
             return
             
         if chain.culprit_trace_id and chain.culprit_trace_id != entry.trace_id:
-            logging.warning(f"Chain for PhyTxId {entry.phy_tx_id} already has culprit TraceId {chain.culprit_trace_id}, ignoring new TraceId {entry.trace_id}")
+            logging.warning(f"{chain.victim_trace_id} - Chain for PhyTxId {entry.phy_tx_id} already has culprit TraceId {chain.culprit_trace_id}, ignoring new TraceId {entry.trace_id}")
             return
             
         if not entry.trace_id or entry.trace_id == 'Empty':
-            logging.warning(f"Expected valid TraceId for PhyTxId {entry.phy_tx_id}, but got {entry.trace_id}")
+            logging.warning(f"{chain.victim_trace_id} - Expected valid TraceId for PhyTxId {entry.phy_tx_id}, but got {entry.trace_id}")
             return
-            
-        chain.culprit_trace_id = entry.trace_id
-        # Добавляем culprit trace_id в целевые для дальнейшего поиска
-        self.chains_by_culprit_trace_id[entry.trace_id] = chain
-        logging.info(f"{chain.victim_trace_id} Found culprit_trace_id {entry.trace_id}")
+        
+        # Only log if we're actually setting a new value (chain.culprit_trace_id was empty)
+        if not chain.culprit_trace_id:
+            chain.culprit_trace_id = entry.trace_id
+            # Добавляем culprit trace_id в целевые для дальнейшего поиска
+            self.chains_by_culprit_trace_id[entry.trace_id] = chain
+            logging.info(f"{chain.victim_trace_id} - Found culprit_trace_id {entry.trace_id}")
     
     def _fill_culprit_session_id(self, entry: LogEntry):
         """Заполняет culprit_session_id в цепочке."""
@@ -236,15 +244,17 @@ class ChainTracerSinglePass:
             
         if chain.culprit_session_id:
             # Это нормально - может быть несколько записей с одним session_id
-            logging.debug(f"Chain for trace_id {entry.trace_id} already has culprit_session_id {chain.culprit_session_id}, ignoring duplicate")
+            logging.debug(f"{chain.victim_trace_id} - Chain for trace_id {entry.trace_id} already has culprit_session_id {chain.culprit_session_id}, ignoring duplicate")
             return
             
         if not entry.session_id:
-            logging.warning(f"Expected SessionId for culprit TraceId {entry.trace_id}, but not found")
+            logging.warning(f"{chain.victim_trace_id} - Expected SessionId for culprit TraceId {entry.trace_id}, but not found")
             return
-            
-        chain.culprit_session_id = entry.session_id
-        logging.info(f"{chain.victim_trace_id} Found culprit_session_id {entry.session_id}")
+        
+        # Only log if we're actually setting a new value (chain.culprit_session_id was empty)
+        if not chain.culprit_session_id:
+            chain.culprit_session_id = entry.session_id
+            logging.info(f"{chain.victim_trace_id} - Found culprit_session_id {entry.session_id}")
     
     def _fill_culprit_tx_id(self, entry: LogEntry):
         """Заполняет culprit_tx_id в цепочке."""
@@ -252,23 +262,30 @@ class ChainTracerSinglePass:
         if not chain:
             logging.warning(f"Expected to find chain for culprit TraceId {entry.trace_id}, but not found")
             return
-            
-        if chain.culprit_tx_id:
-            # Это нормально - может быть несколько tx_id для одного trace_id
-            logging.debug(f"Chain for trace_id {entry.trace_id} already has culprit_tx_id {chain.culprit_tx_id}, ignoring additional tx_id")
-            return
-            
+
         if not entry.tx_id or entry.tx_id == 'Empty':
-            logging.warning(f"Expected valid TxId for culprit TraceId {entry.trace_id}, but got {entry.tx_id}")
+            logging.warning(f"{chain.victim_trace_id} - Expected valid TxId, but got {entry.tx_id}")
             return
-            
+
+        if chain.culprit_tx_id == entry.tx_id:
+            # Это нормально - может быть несколько строк лога
+            return
+        
+        if chain.culprit_tx_id and chain.culprit_tx_id != entry.tx_id:
+            # Обнаружился другой TxId - это ненормально, игнорируем его
+            logging.debug(f"{chain.victim_trace_id} - Chain already has culprit_tx_id {chain.culprit_tx_id}, ignoring different tx_id {entry.tx_id}")
+            return
+        
+                    
         # Берем первый валидный tx_id, который не является phy_tx_id
         if entry.tx_id == chain.culprit_phy_tx_id:
-            logging.debug(f"tx_id {entry.tx_id} is same as phy_tx_id for trace_id {entry.trace_id}, skipping")
+            logging.debug(f"{chain.victim_trace_id} - TxId {entry.tx_id} is same as culprit PhyTxId, skipping")
             return
-            
-        chain.culprit_tx_id = entry.tx_id
-        logging.info(f"{chain.victim_trace_id} Found culprit_tx_id {entry.tx_id}")
+        
+        # Only log if we're actually setting a new value (chain.culprit_tx_id was empty)
+        if not chain.culprit_tx_id:
+            chain.culprit_tx_id = entry.tx_id
+            logging.info(f"{chain.victim_trace_id} - Found culprit_tx_id {entry.tx_id}")
     
     def _collect_session_tx(self, entry: LogEntry):
         """Запоминает, какая транзакция сейчас в сессии"""
@@ -361,7 +378,7 @@ class ChainTracerSinglePass:
             # Логируем предупреждения для любых отсутствующих полей
             if missing_fields:
                 incomplete_count += 1
-                logging.warning(f"Incomplete chain for victim TraceId {chain.victim_trace_id} - missing fields: {', '.join(missing_fields)}")
+                logging.warning(f"{chain.victim_trace_id} - Incomplete chain. Missing fields: {', '.join(missing_fields)}")
 
         logging.info(f"Chain analysis complete: found {len(self.chains)} TLI chains, {incomplete_count} incomplete")
     
