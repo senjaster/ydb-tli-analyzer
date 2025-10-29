@@ -165,8 +165,8 @@ def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: Lo
         chains = tracer.find_all_invalidation_chains()
         
     except Exception as e:
-        print(e)
-        raise Exception(f"Failed to analyze log data: {e}")
+        logging.exception(f"Failed to analyze log data: {e}")
+        raise e
     
     if not chains:
         return
@@ -177,13 +177,15 @@ def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: Lo
         try:
             reporter.write_sql_report(chains)
         except Exception as e:
-            raise Exception(f"Failed to generate SQL report: {e}")
+            logging.exception(f"Failed to generate SQL report: {e}")
+            raise e
     else:  # default to yaml
         reporter = YAMLReporter()
         try:
             reporter.write_yaml_report(chains)
         except Exception as e:
-            raise Exception(f"Failed to generate YAML report: {e}")
+            logging.exception(f"Failed to generate YAML report: {e}")
+            raise e
 
 
 if __name__ == "__main__":
