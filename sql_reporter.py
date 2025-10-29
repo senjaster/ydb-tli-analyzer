@@ -106,7 +106,8 @@ class SQLReporter:
         
         # One-line separator with timestamp and dashes
         timestamp = query_entry.timestamp or 'unknown'
-        file.write(f"-- {timestamp} " + "-" * (120 - len(timestamp) - 3) + "\n")
+        sep = f"-- {timestamp} --- {query_entry.trace_id} " + "-" * 120
+        file.write(sep[:123] + "\n")
         
         # Write the actual query
         if query_entry.query_text:
@@ -116,6 +117,6 @@ class SQLReporter:
                 file.write(";")
             file.write("\n")
         else:
-            file.write("-- No query text available\n")
+            file.write(f"-- {query_entry.query_action}\n")
         
         file.write("\n")
