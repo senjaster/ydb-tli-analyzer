@@ -6,5 +6,10 @@ docs
 .pytest_cache
 
 .vscode
+.DS_Store
 
 .coverage
+
+report.log
+report.sql
+report.yaml
