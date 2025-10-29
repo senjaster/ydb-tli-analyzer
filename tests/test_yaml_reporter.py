@@ -55,8 +55,6 @@ class TestYAMLReporter:
             culprit_session_id="ydb://session/3?node_id=50003&id=culprit_session",
             victim_entry=self.victim_entry,
             culprit_entry=self.culprit_entry,
-            victim_query_text="SELECT * FROM tt1",
-            culprit_query_text="UPDATE tt1 SET col=1",
             table_name="/Root/database/test_schema/tt1",
             victim_tx_id="victim_tx_id",
             culprit_tx_id="culprit_tx_id",

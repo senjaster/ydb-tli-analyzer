@@ -18,6 +18,7 @@ from log_parser import LogParser, LogEntry, LogFormat
 from chain_tracer_single_pass import ChainTracerSinglePass
 from chain_models import LockInvalidationChain
 from yaml_reporter import YAMLReporter
+from sql_reporter import SQLReporter
 from log_sorter import sort_log_stream
 
 
@@ -29,14 +30,19 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+    # YAML output (default):
     python tli_analyzer.py --log-file docs/22_1.log
     python tli_analyzer.py --log-file docs/22_1.log > report.yaml
     python tli_analyzer.py --log-file docs/22_1_sorted.log --no-sort > report.yaml
     
+    # SQL-script-like output:
+    python tli_analyzer.py --log-file docs/22_1.log --output-format sql
+    python tli_analyzer.py --log-file docs/22_1.log -o sql > report.sql
+    
     # Using stdin with grep pre-filtering:
-    grep "Transaction locks invalidated\\|Acquire lock\\|Break locks" docs/22_1.log | python tli_analyzer.py
-    cat docs/22_1.log | python tli_analyzer.py > report.yaml
-    cat docs/22_1_sorted.log | python tli_analyzer.py --no-sort > report.yaml
+    grep "Transaction locks invalidated\\|Acquire lock\\|Break locks" docs/22_1.log | python tli_analyzer.py -o sql
+    cat docs/22_1.log | python tli_analyzer.py --output-format yaml > report.yaml
+    cat docs/22_1_sorted.log | python tli_analyzer.py --no-sort -o sql > report.sql
         """
     )
     
@@ -58,6 +64,13 @@ Examples:
         help='Disable sorting of log lines by timestamp (logs are sorted by default)'
     )
     
+    parser.add_argument(
+        '--output-format', '-o',
+        help='Output format for the report',
+        choices=['yaml', 'sql'],
+        default='yaml'
+    )
+    
     args = parser.parse_args()
     
     # Validate input - either file or stdin
@@ -77,7 +90,7 @@ Examples:
     format = LogFormat(args.log_format or 'systemd')
     
     try:
-        analyze_logs(input_source, not args.no_sort, format)
+        analyze_logs(input_source, not args.no_sort, format, args.output_format)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -97,7 +110,7 @@ def get_input_stream(input_source: Optional[str], sort_logs: bool, format: LogFo
         return sys.stdin
 
 
-def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: LogFormat = LogFormat.SYSTEMD) -> None:
+def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: LogFormat = LogFormat.SYSTEMD, output_format: str = 'yaml') -> None:
     """Анализирует лог (из файла или stdin) и генерирует отчет."""
     
     parser = LogParser(format)
@@ -109,17 +122,25 @@ def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: Lo
         chains = tracer.find_all_invalidation_chains()
         
     except Exception as e:
+        print(e)
         raise Exception(f"Failed to analyze log data: {e}")
     
     if not chains:
         return
     
-    reporter = YAMLReporter()
-    
-    try:
-        reporter.write_yaml_report(chains)
-    except Exception as e:
-        raise Exception(f"Failed to generate report: {e}")
+    # Choose reporter based on output format
+    if output_format == 'sql':
+        reporter = SQLReporter()
+        try:
+            reporter.write_sql_report(chains)
+        except Exception as e:
+            raise Exception(f"Failed to generate SQL report: {e}")
+    else:  # default to yaml
+        reporter = YAMLReporter()
+        try:
+            reporter.write_yaml_report(chains)
+        except Exception as e:
+            raise Exception(f"Failed to generate YAML report: {e}")
 
 
 if __name__ == "__main__":

@@ -28,9 +28,8 @@ class LockInvalidationChain:
     culprit_trace_id: str
     culprit_session_id: str
     victim_entry: LogEntry
+    victim_phy_tx_id: Optional[str] = None
     culprit_entry: Optional[LogEntry] = None
-    victim_query_text: Optional[str] = None
-    culprit_query_text: Optional[str] = None
     table_name: Optional[str] = None
     victim_tx_id: Optional[str] = None
     culprit_tx_id: Optional[str] = None

@@ -205,8 +205,6 @@ class TestChainTracer:
         
         # Test optional fields default to None
         assert chain.culprit_entry is None
-        assert chain.victim_query_text is None
-        assert chain.culprit_query_text is None
         assert chain.table_name is None
         assert chain.victim_tx_id is None
         assert chain.culprit_tx_id is None

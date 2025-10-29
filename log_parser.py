@@ -19,6 +19,7 @@ class LogEntry:
     process: str
     message_type: str
     log_level: str
+    begin_tx: bool = False
     session_id: Optional[str] = None
     trace_id: Optional[str] = None
     phy_tx_id: Optional[str] = None
@@ -52,7 +53,7 @@ class LogParser:
             'phy_tx_id': r'PhyTxId:\s*(\d+)',
             'lock_id': r'LockId:\s*(\d+)',
             'status': r'Status:\s*([^,\s]+)',
-            'query_text': r'QueryText:\s*(.+),TxId:',
+            'query_text': r'QueryText: "(.*?)(?<![\\])"',  # Respects escaped quotes!
             'key': r'Key:\s*([^,\s]+)',
             'issues': r'Issues:\s*\{([^}]+)\}',
             'break_lock_id': r'BreakLocks:\s*\[([^\]]+)\]',
@@ -60,6 +61,7 @@ class LogParser:
             'tx_id': r'TxId:\s*([^,\s]+)',
             'query_action': r'QueryAction:\s*([^,\s]+)',
             'query_type': r'QueryType:\s*([^,\s]+)',
+            'begin_tx': r'BeginTx: (true)'
         }
         
         # Лучше заранее скомпилировать, так как данных может быть много
@@ -117,12 +119,14 @@ class LogParser:
                 match = pattern.search(content)
                 if match:
                     value = match.group(1).strip()
-                    if field == 'break_lock_id':
+                    if field == 'begin_tx':
+                        entry.begin_tx = True
+                    elif field == 'break_lock_id':
                         # Список сломанных блокировок
                         lock_ids = [lock_id.strip() for lock_id in value.split()]
                         setattr(entry, field, lock_ids)
                     elif field == 'query_text':
-                        unescaped_value = value.replace(r'\n','\n')
+                        unescaped_value = value.replace(r'\n','\n').replace(r'\"','"')
                         setattr(entry, field, unescaped_value)
                     else:
                         setattr(entry, field, value)

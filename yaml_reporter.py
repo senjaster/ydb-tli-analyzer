@@ -85,14 +85,7 @@ class YAMLReporter:
         if chain.culprit_entry:
             event['culprit']['node'] = chain.culprit_entry.node
             event['culprit']['process'] = chain.culprit_entry.process
-        
-        # Добавляет тексты запросов, если доступны (для обратной совместимости)
-        if chain.victim_query_text:
-            event['victim']['query_text'] = QueryTextStr(chain.victim_query_text)
-        
-        if chain.culprit_query_text:
-            event['culprit']['query_text'] = QueryTextStr(chain.culprit_query_text)
-        
+                
         # Добавляет все запросы для каждой транзакции
         if chain.victim_queries:
             formatted_victim_queries = []
