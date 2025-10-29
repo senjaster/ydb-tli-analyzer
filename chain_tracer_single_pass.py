@@ -27,9 +27,15 @@ class ChainTracerSinglePass:
         # Словарь для отслеживания текущей транзакции в сессии.
         self._session_current_tx: dict[str, str] = {}
         # Словари для быстрого поиска цепочек по различным ID
-        self.chains_by_culprit_trace_id: Dict[str, LockInvalidationChain] = {}
-        self.chains_by_lock_id: Dict[str, LockInvalidationChain] = {}
-        self.chains_by_culprit_phy_tx_id: Dict[str, LockInvalidationChain] = {}
+        self.chains_by_lock_id: Dict[str, LockInvalidationChain] = {}  # лок уникальный, поэтому тут 1:1
+
+        # Каждая PhyTxId может сломать множество транзакций, поэтому список
+        self.chains_by_culprit_phy_tx_id: Dict[str, list[LockInvalidationChain]] = defaultdict(list)  
+        
+        # Из-за того что PhyTxId может сломать множество транзакций, тут тоже должен быть список
+        self.chains_by_culprit_trace_id: Dict[str, list[LockInvalidationChain]] = defaultdict(list)  
+
+        
         # Кэш для entries по trace_id (для получения culprit_entry и query_text)
         self.entries_by_trace: Dict[str, LogEntry] = {}
     
@@ -199,8 +205,9 @@ class ChainTracerSinglePass:
                 continue
 
             if chain.victim_phy_tx_id and chain.victim_phy_tx_id == entry.phy_tx_id:
-                # Почему-то бывает что транзакция как-бы сама ломает свой же лок. Игнорим
-                # logging.(f"{chain.victim_trace_id} - Chain for LockId {lock_id} already has victim PhyTxId {chain.victim_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}. It's a self-break!")
+                # Когда транзакция обнаруживает, что ее лок сломан, она логирует это и в BROKEN_LOCKS  и в LocksBroken
+                # Поэтому приходится игнорировать часть строк. Не логирую, т.к. это совсем не интересно
+                logging.debug(f"{chain.victim_trace_id} - skipping wrong LocksBroken entry")
                 continue
                 
             if chain.culprit_phy_tx_id and chain.culprit_phy_tx_id != entry.phy_tx_id:
@@ -210,82 +217,86 @@ class ChainTracerSinglePass:
             # Only log if we're actually setting a new value (chain.culprit_phy_tx_id was empty)
             if not chain.culprit_phy_tx_id:
                 chain.culprit_phy_tx_id = entry.phy_tx_id
-                self.chains_by_culprit_phy_tx_id[entry.phy_tx_id] = chain
+                self.chains_by_culprit_phy_tx_id[entry.phy_tx_id].append(chain)
                 logging.info(f"{chain.victim_trace_id} - Found culprit_phy_tx_id {entry.phy_tx_id} for lock_id {lock_id}")
     
     def _fill_culprit_trace_id(self, entry: LogEntry):
         """Заполняет culprit_trace_id в цепочке."""
-        chain = self.chains_by_culprit_phy_tx_id.get(entry.phy_tx_id)
-        if not chain:
-            logging.warning(f"Expected to find chain for culprit PhyTxId {entry.phy_tx_id}, but not found")
-            return
-            
-        if chain.culprit_trace_id and chain.culprit_trace_id != entry.trace_id:
-            logging.warning(f"{chain.victim_trace_id} - Chain for PhyTxId {entry.phy_tx_id} already has culprit TraceId {chain.culprit_trace_id}, ignoring new TraceId {entry.trace_id}")
-            return
-            
-        if not entry.trace_id or entry.trace_id == 'Empty':
-            logging.warning(f"{chain.victim_trace_id} - Expected valid TraceId for PhyTxId {entry.phy_tx_id}, but got {entry.trace_id}")
-            return
+        victim_chains = self.chains_by_culprit_phy_tx_id.get(entry.phy_tx_id)
         
-        # Only log if we're actually setting a new value (chain.culprit_trace_id was empty)
-        if not chain.culprit_trace_id:
-            chain.culprit_trace_id = entry.trace_id
-            # Добавляем culprit trace_id в целевые для дальнейшего поиска
-            self.chains_by_culprit_trace_id[entry.trace_id] = chain
-            logging.info(f"{chain.victim_trace_id} - Found culprit_trace_id {entry.trace_id}")
+        if not victim_chains:
+            logging.warning(f"Expected to find chains for culprit PhyTxId {entry.phy_tx_id}, but not found")
+            return
+
+        for chain in victim_chains:
+            if chain.culprit_trace_id and chain.culprit_trace_id != entry.trace_id:
+                logging.warning(f"{chain.victim_trace_id} - Chain for PhyTxId {entry.phy_tx_id} already has culprit TraceId {chain.culprit_trace_id}, ignoring new TraceId {entry.trace_id}")
+                return
+                
+            if not entry.trace_id or entry.trace_id == 'Empty':
+                logging.warning(f"{chain.victim_trace_id} - Expected valid TraceId for PhyTxId {entry.phy_tx_id}, but got {entry.trace_id}")
+                return
+            
+            # Only log if we're actually setting a new value (chain.culprit_trace_id was empty)
+            if not chain.culprit_trace_id:
+                chain.culprit_trace_id = entry.trace_id
+                # Добавляем culprit trace_id в целевые для дальнейшего поиска
+                self.chains_by_culprit_trace_id[entry.trace_id].append(chain)
+                logging.info(f"{chain.victim_trace_id} - Found culprit_trace_id {entry.trace_id}")
     
     def _fill_culprit_session_id(self, entry: LogEntry):
         """Заполняет culprit_session_id в цепочке."""
-        chain = self.chains_by_culprit_trace_id.get(entry.trace_id)
-        if not chain:
+        victim_chains = self.chains_by_culprit_trace_id.get(entry.trace_id)
+        if not victim_chains:
             logging.warning(f"Expected to find chain for culprit TraceId {entry.trace_id}, but not found")
             return
-            
-        if chain.culprit_session_id:
-            # Это нормально - может быть несколько записей с одним session_id
-            logging.debug(f"{chain.victim_trace_id} - Chain for trace_id {entry.trace_id} already has culprit_session_id {chain.culprit_session_id}, ignoring duplicate")
-            return
-            
-        if not entry.session_id:
-            logging.warning(f"{chain.victim_trace_id} - Expected SessionId for culprit TraceId {entry.trace_id}, but not found")
-            return
         
-        # Only log if we're actually setting a new value (chain.culprit_session_id was empty)
-        if not chain.culprit_session_id:
-            chain.culprit_session_id = entry.session_id
-            logging.info(f"{chain.victim_trace_id} - Found culprit_session_id {entry.session_id}")
+        for chain in victim_chains:
+            
+            if not entry.session_id:
+                logging.warning(f"{chain.victim_trace_id} - Expected SessionId for culprit TraceId {entry.trace_id}, but not found")
+                return
+            
+            if chain.culprit_session_id and chain.culprit_session_id != entry.session_id:
+                # Это нормально - может быть несколько записей с одним session_id
+                logging.warning(f"{chain.victim_trace_id} - Chain for trace_id {entry.trace_id} already has culprit_session_id {chain.culprit_session_id}, ignoring new SessionId {entry.session_id}")
+                return
+                  
+            # Only log if we're actually setting a new value (chain.culprit_session_id was empty)
+            if not chain.culprit_session_id:
+                chain.culprit_session_id = entry.session_id
+                logging.info(f"{chain.victim_trace_id} - Found culprit_session_id {entry.session_id}")
     
     def _fill_culprit_tx_id(self, entry: LogEntry):
         """Заполняет culprit_tx_id в цепочке."""
-        chain = self.chains_by_culprit_trace_id.get(entry.trace_id)
-        if not chain:
+        victim_chains = self.chains_by_culprit_trace_id.get(entry.trace_id)
+        if not victim_chains:
             logging.warning(f"Expected to find chain for culprit TraceId {entry.trace_id}, but not found")
             return
 
-        if not entry.tx_id or entry.tx_id == 'Empty':
-            logging.warning(f"{chain.victim_trace_id} - Expected valid TxId, but got {entry.tx_id}")
-            return
+        for chain in victim_chains:
+            if not entry.tx_id or entry.tx_id == 'Empty':
+                logging.warning(f"{chain.victim_trace_id} - Expected valid TxId, but got {entry.tx_id}")
+                return
 
-        if chain.culprit_tx_id == entry.tx_id:
-            # Это нормально - может быть несколько строк лога
-            return
-        
-        if chain.culprit_tx_id and chain.culprit_tx_id != entry.tx_id:
-            # Обнаружился другой TxId - это ненормально, игнорируем его
-            logging.debug(f"{chain.victim_trace_id} - Chain already has culprit_tx_id {chain.culprit_tx_id}, ignoring different tx_id {entry.tx_id}")
-            return
-        
+            if chain.culprit_tx_id == entry.tx_id:
+                # Это нормально - может быть несколько строк лога
+                return
+            
+            if chain.culprit_tx_id and chain.culprit_tx_id != entry.tx_id:
+                # Обнаружился другой TxId - это ненормально, игнорируем его
+                logging.debug(f"{chain.victim_trace_id} - Chain already has culprit_tx_id {chain.culprit_tx_id}, ignoring different tx_id {entry.tx_id}")
+                return        
                     
-        # Берем первый валидный tx_id, который не является phy_tx_id
-        if entry.tx_id == chain.culprit_phy_tx_id:
-            logging.debug(f"{chain.victim_trace_id} - TxId {entry.tx_id} is same as culprit PhyTxId, skipping")
-            return
-        
-        # Only log if we're actually setting a new value (chain.culprit_tx_id was empty)
-        if not chain.culprit_tx_id:
-            chain.culprit_tx_id = entry.tx_id
-            logging.info(f"{chain.victim_trace_id} - Found culprit_tx_id {entry.tx_id}")
+            # В поле TxId в некоторых случаях пишется PyTxId. Нужно игнорировать такие значения
+            if entry.tx_id == chain.culprit_phy_tx_id:
+                logging.debug(f"{chain.victim_trace_id} - Value {entry.tx_id} is not a real TxId. Skipping")
+                return
+            
+            # Only log if we're actually setting a new value (chain.culprit_tx_id was empty)
+            if not chain.culprit_tx_id:
+                chain.culprit_tx_id = entry.tx_id
+                logging.info(f"{chain.victim_trace_id} - Found culprit_tx_id {entry.tx_id}")
     
     def _collect_session_tx(self, entry: LogEntry):
         """Запоминает, какая транзакция сейчас в сессии"""
