@@ -139,7 +139,7 @@ class ChainTracerSinglePass:
         )
         
         self.chains[entry.trace_id] = chain
-        logging.info(f"{chain.victim_trace_id} - Created new TLI chain for table {table_name}")
+        logging.debug(f"{chain.victim_trace_id} - Created new TLI chain for table {table_name}")
     
     def _fill_lock_id(self, entry: LogEntry):
         """Заполняет lock_id в цепочке."""
@@ -167,7 +167,7 @@ class ChainTracerSinglePass:
         if not chain.lock_id:
             chain.lock_id = first_lock_id
             self.chains_by_lock_id[first_lock_id] = chain
-            logging.info(f"{chain.victim_trace_id} - Found lock_id {first_lock_id}")
+            logging.debug(f"{chain.victim_trace_id} - Found lock_id {first_lock_id}")
 
     def _fill_victim_phy_tx_id(self, entry: LogEntry):
         """Заполняет victim_phy_tx_id в цепочке."""
@@ -187,7 +187,7 @@ class ChainTracerSinglePass:
         # Only log if we're actually setting a new value (chain.victim_phy_tx_id was empty)
         if not chain.victim_phy_tx_id:
             chain.victim_phy_tx_id = entry.phy_tx_id
-            logging.info(f"{chain.victim_trace_id} - Found victim_phy_tx_id {entry.phy_tx_id}")
+            logging.debug(f"{chain.victim_trace_id} - Found victim_phy_tx_id {entry.phy_tx_id}")
 
     def _fill_culprit_phy_tx_id(self, entry: LogEntry):
         """Заполняет culprit_phy_tx_id в цепочке по break_lock_id."""
@@ -218,7 +218,7 @@ class ChainTracerSinglePass:
             if not chain.culprit_phy_tx_id:
                 chain.culprit_phy_tx_id = entry.phy_tx_id
                 self.chains_by_culprit_phy_tx_id[entry.phy_tx_id].append(chain)
-                logging.info(f"{chain.victim_trace_id} - Found culprit_phy_tx_id {entry.phy_tx_id} for lock_id {lock_id}")
+                logging.debug(f"{chain.victim_trace_id} - Found culprit_phy_tx_id {entry.phy_tx_id} for lock_id {lock_id}")
     
     def _fill_culprit_trace_id(self, entry: LogEntry):
         """Заполняет culprit_trace_id в цепочке."""
@@ -242,7 +242,7 @@ class ChainTracerSinglePass:
                 chain.culprit_trace_id = entry.trace_id
                 # Добавляем culprit trace_id в целевые для дальнейшего поиска
                 self.chains_by_culprit_trace_id[entry.trace_id].append(chain)
-                logging.info(f"{chain.victim_trace_id} - Found culprit_trace_id {entry.trace_id}")
+                logging.debug(f"{chain.victim_trace_id} - Found culprit_trace_id {entry.trace_id}")
     
     def _fill_culprit_session_id(self, entry: LogEntry):
         """Заполняет culprit_session_id в цепочке."""
@@ -265,7 +265,7 @@ class ChainTracerSinglePass:
             # Only log if we're actually setting a new value (chain.culprit_session_id was empty)
             if not chain.culprit_session_id:
                 chain.culprit_session_id = entry.session_id
-                logging.info(f"{chain.victim_trace_id} - Found culprit_session_id {entry.session_id}")
+                logging.debug(f"{chain.victim_trace_id} - Found culprit_session_id {entry.session_id}")
     
     def _fill_culprit_tx_id(self, entry: LogEntry):
         """Заполняет culprit_tx_id в цепочке."""
@@ -296,7 +296,7 @@ class ChainTracerSinglePass:
             # Only log if we're actually setting a new value (chain.culprit_tx_id was empty)
             if not chain.culprit_tx_id:
                 chain.culprit_tx_id = entry.tx_id
-                logging.info(f"{chain.victim_trace_id} - Found culprit_tx_id {entry.tx_id}")
+                logging.debug(f"{chain.victim_trace_id} - Found culprit_tx_id {entry.tx_id}")
     
     def _collect_session_tx(self, entry: LogEntry):
         """Запоминает, какая транзакция сейчас в сессии"""
@@ -319,7 +319,7 @@ class ChainTracerSinglePass:
                 if inferred_tx:
                     self.queries_by_tx[inferred_tx].append(entry)
                 else:
-                    logging.warning(f"Query has no TxId and unable to infer TxIf from SessionId {entry.session_id}")
+                    logging.warning(f"Query has no TxId and unable to infer TxId from SessionId {entry.session_id}")
             else:
                 logging.warning(f"Query entry has QueryText and QueryAction but no TxId and no SessionId")
 
@@ -391,7 +391,7 @@ class ChainTracerSinglePass:
                 incomplete_count += 1
                 logging.warning(f"{chain.victim_trace_id} - Incomplete chain. Missing fields: {', '.join(missing_fields)}")
 
-        logging.info(f"Chain analysis complete: found {len(self.chains)} TLI chains, {incomplete_count} incomplete")
+        logging.debug(f"Chain analysis complete: found {len(self.chains)} TLI chains, {incomplete_count} incomplete")
     
     def _extract_table_name(self, issues: Optional[str]) -> Optional[str]:
         """Извлекает имя таблицы из описания TLI."""

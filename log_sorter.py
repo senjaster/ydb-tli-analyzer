@@ -2,6 +2,7 @@
 
 import subprocess
 import shutil
+import logging
 from typing import Iterator, TextIO
 
 from log_parser import LogFormat
@@ -32,7 +33,9 @@ def sort_log_stream(input_stream: TextIO, format: LogFormat = LogFormat.SYSTEMD)
             process.stdin.close()
         except BrokenPipeError:
             pass
-        
+        logging.info("Log read sucessfuly")
+        yield process.stdout.readline()
+        logging.info("Log sorted sucessfuly")
         for line in process.stdout:
             yield line.rstrip('\n')
         

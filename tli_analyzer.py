@@ -72,17 +72,32 @@ Examples:
         default='yaml'
     )
     
-    parser.add_argument(
+    # Create mutually exclusive group for verbosity options
+    verbosity_group = parser.add_mutually_exclusive_group()
+    
+    verbosity_group.add_argument(
         '-v', '--verbose',
         action='count',
         default=0,
         help='Increase verbosity level. Use -v for INFO, -vv for DEBUG, -vvv for more detailed DEBUG messages'
     )
     
+    verbosity_group.add_argument(
+        '-q', '--quiet',
+        action='store_true',
+        help='Suppress all output except errors'
+    )
+
     args = parser.parse_args()
     
     # Configure logging based on verbosity level
-    _configure_logging(args.verbose)
+
+    if args.quiet:
+        verbosity = -1
+    else:
+        verbosity = args.verbose
+
+    _configure_logging(verbosity)
     
     # Validate input - either file or stdin
     if args.log_file:
@@ -109,7 +124,10 @@ Examples:
 
 def _configure_logging(verbosity: int) -> None:
     """Configure logging based on verbosity level."""
-    if verbosity == 0:
+    if verbosity == -1:
+        # Quiet
+        level = logging.ERROR
+    elif verbosity == 0:
         # Default: only show warnings and errors
         level = logging.WARNING
     elif verbosity == 1:
@@ -155,14 +173,16 @@ def get_input_stream(input_source: Optional[str], sort_logs: bool, format: LogFo
 
 def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: LogFormat = LogFormat.SYSTEMD, output_format: str = 'yaml') -> None:
     """Анализирует лог (из файла или stdin) и генерирует отчет."""
-    
+
     parser = LogParser(format)
     
     try:
+        logging.info("Log annalyzis started")
         input_stream = get_input_stream(input_source, sort_logs, format)
         log_entries_stream = parser.parse_stream(input_stream)
         tracer = ChainTracerSinglePass(log_entries_stream)
         chains = tracer.find_all_invalidation_chains()
+        logging.info("Log annalyzis completed")
         
     except Exception as e:
         logging.exception(f"Failed to analyze log data: {e}")
