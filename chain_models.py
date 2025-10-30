@@ -23,15 +23,16 @@ class LockInvalidationChain:
     """Полное описание всей информации, извлеченной из лога по одной ошибке TLI."""
     victim_session_id: str
     victim_trace_id: str
-    lock_id: str
-    culprit_phy_tx_id: str
-    culprit_trace_id: str
-    culprit_session_id: str
+    victim_tx_id: str
     victim_entry: LogEntry
+    table_name: str
+    lock_id: Optional[str] = None
+    culprit_phy_tx_id: Optional[str] = None
+    culprit_trace_id: Optional[str] = None
+    culprit_session_id: Optional[str] = None
     victim_phy_tx_id: Optional[str] = None
     culprit_entry: Optional[LogEntry] = None
-    table_name: Optional[str] = None
-    victim_tx_id: Optional[str] = None
+
     culprit_tx_id: Optional[str] = None
     victim_queries: Optional[List[LogEntry]] = None
     culprit_queries: Optional[List[LogEntry]] = None

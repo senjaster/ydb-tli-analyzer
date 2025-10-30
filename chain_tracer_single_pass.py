@@ -129,13 +129,9 @@ class ChainTracerSinglePass:
         chain = LockInvalidationChain(
             victim_session_id=entry.session_id,
             victim_trace_id=entry.trace_id,
-            lock_id="",  # Будет заполнено позже
-            culprit_phy_tx_id="",  # Будет заполнено позже
-            culprit_trace_id="",  # Будет заполнено позже
-            culprit_session_id="",  # Будет заполнено позже
             victim_entry=entry,
             table_name=table_name,
-            victim_tx_id=entry.tx_id if entry.tx_id != 'Empty' else None
+            victim_tx_id=entry.tx_id if entry.tx_id != 'Unknown' else None
         )
         
         self.chains[entry.trace_id] = chain
@@ -159,7 +155,7 @@ class ChainTracerSinglePass:
         # Пока что я не видел логов, в которых в строке с break_lock_id было бы несколько lock_id
         # Поэтому просто берем первый элемент списка - он же и единственный
 
-        if len(chain.lock_id) > 1:
+        if len(entry.lock_id) > 1:
             logging.warning(f"{chain.victim_trace_id} - There are several LockId in BreakLocks row. This case is not handled.")
 
         first_lock_id = entry.lock_id[0] if isinstance(entry.lock_id, list) else entry.lock_id
