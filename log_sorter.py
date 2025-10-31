@@ -34,10 +34,14 @@ def sort_log_stream(input_stream: TextIO, format: LogFormat = LogFormat.SYSTEMD)
         except BrokenPipeError:
             pass
         logging.info("Log read sucessfuly")
-        yield process.stdout.readline()
-        logging.info("Log sorted sucessfuly")
-        for line in process.stdout:
-            yield line.rstrip('\n')
+        first_line = process.stdout.readline()
+        if first_line.strip():  # Only yield if there's actual content
+            yield first_line.rstrip('\n')
+            logging.info("Log sorted sucessfuly")
+            for line in process.stdout:
+                yield line.rstrip('\n')
+        else:
+            logging.info("Log sorted sucessfuly - empty input")
         
         return_code = process.wait()
         if return_code != 0:

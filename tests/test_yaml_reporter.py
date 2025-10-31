@@ -240,11 +240,13 @@ class TestYAMLReporter:
         minimal_chain = LockInvalidationChain(
             victim_session_id="victim_session",
             victim_trace_id="victim_trace",
+            victim_tx_id="victim_tx_id",
+            victim_entry=self.victim_entry,
+            table_name=None,  # Set to None to test minimal data
             lock_id="lock_id",
             culprit_phy_tx_id="culprit_phy_tx",
             culprit_trace_id="culprit_trace",
-            culprit_session_id="culprit_session",
-            victim_entry=self.victim_entry
+            culprit_session_id="culprit_session"
         )
         
         chains = [minimal_chain]

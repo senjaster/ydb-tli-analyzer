@@ -121,6 +121,10 @@ class YAMLReporter:
         if chain.culprit_entry:
             event['raw_entries']['culprit_log_line'] = chain.culprit_entry.raw_line.strip()
         
+        # Добавляет детальные записи лога в обратном порядке, если доступны
+        if chain.log_details:
+            event['raw_entries']['detailed_log_lines'] = [line.strip() for line in reversed(chain.log_details)]
+        
         return event
     
     def write_yaml_report(self, chains: List[LockInvalidationChain], file=sys.stdout) -> None:

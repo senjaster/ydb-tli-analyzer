@@ -72,6 +72,12 @@ Examples:
         default='yaml'
     )
     
+    parser.add_argument(
+        '--collect-details',
+        action='store_true',
+        help='Collect detailed log lines for each chain (may increase memory usage and processing time)'
+    )
+    
     # Create mutually exclusive group for verbosity options
     verbosity_group = parser.add_mutually_exclusive_group()
     
@@ -116,7 +122,7 @@ Examples:
     format = LogFormat(args.log_format or 'systemd')
     
     try:
-        analyze_logs(input_source, not args.no_sort, format, args.output_format)
+        analyze_logs(input_source, not args.no_sort, format, args.output_format, args.collect_details)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -171,7 +177,7 @@ def get_input_stream(input_source: Optional[str], sort_logs: bool, format: LogFo
         return sys.stdin
 
 
-def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: LogFormat = LogFormat.SYSTEMD, output_format: str = 'yaml') -> None:
+def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: LogFormat = LogFormat.SYSTEMD, output_format: str = 'yaml', collect_details: bool = False) -> None:
     """Анализирует лог (из файла или stdin) и генерирует отчет."""
 
     parser = LogParser(format)
@@ -181,7 +187,7 @@ def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: Lo
         input_stream = get_input_stream(input_source, sort_logs, format)
         log_entries_stream = parser.parse_stream(input_stream)
         tracer = ChainTracerSinglePass(log_entries_stream)
-        chains = tracer.find_all_invalidation_chains()
+        chains = tracer.find_all_invalidation_chains(collect_details=collect_details)
         logging.info("Log annalyzis completed")
         
     except Exception as e:

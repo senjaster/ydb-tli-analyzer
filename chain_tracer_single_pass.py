@@ -39,14 +39,18 @@ class ChainTracerSinglePass:
         # Кэш для entries по trace_id (для получения culprit_entry и query_text)
         self.entries_by_trace: Dict[str, LogEntry] = {}
     
-    def find_all_invalidation_chains(self) -> List[LockInvalidationChain]:
+    def find_all_invalidation_chains(self, collect_details: bool = False) -> List[LockInvalidationChain]:
         """Находит все цепочки TLI в логе за один проход.
         
         Предполагается, что log_entries уже отсортированы в обратном хронологическом порядке.
+        
+        Args:
+            collect_details: Если True, собирает детальную информацию о всех строках лога,
+                           которые относятся к каждой цепочке в поле log_details.
         """
         # Перебираем строки последовательно и строим цепочки
         for entry in self.log_entries:
-            self._process_entry(entry)
+            self._process_entry(entry, collect_details)
 
         # Заполнить victim_queries и culprit_queries для найденных цепочек
         self._populate_queries()
@@ -54,15 +58,13 @@ class ChainTracerSinglePass:
         # Завершить все незавершенные цепочки
         self._complete_remaining_chains()
         
-
-        
         # Проверить, что все цепочки полностью заполнены
         self._validate_chains()
         
-        return list(self.chains.values())
+        return [v for v in self.chains.values()]
     
     
-    def _process_entry(self, entry: LogEntry):
+    def _process_entry(self, entry: LogEntry, collect_details: bool):
         """Обрабатывает одну запись лога и обновляет цепочки."""
         # Собираем запросы для транзакций
         if entry.query_action:
@@ -85,7 +87,7 @@ class ChainTracerSinglePass:
         
         # Если в строке есть Transaction locks invalidated - создаем новую цепочку
         if self._is_transaction_locks_invalidated(entry):
-            self._create_new_chain(entry)
+            self._create_new_chain(entry, collect_details)
 
         # Если в строке есть интересующий нас TraceId (victim)  и LOCKS_BROKEN - заполняем phy_tx_id для жертвы
         if entry.trace_id in self.chains and entry.status == "LOCKS_BROKEN" and entry.phy_tx_id:
@@ -117,7 +119,7 @@ class ChainTracerSinglePass:
                 "Transaction locks invalidated" in entry.issues and
                 entry.status == "ABORTED")
     
-    def _create_new_chain(self, entry: LogEntry):
+    def _create_new_chain(self, entry: LogEntry, collect_details: bool = False):
         """Создает новую цепочку для TLI."""
         if not entry.trace_id or not entry.session_id:
             return
@@ -131,7 +133,8 @@ class ChainTracerSinglePass:
             victim_trace_id=entry.trace_id,
             victim_entry=entry,
             table_name=table_name,
-            victim_tx_id=entry.tx_id if entry.tx_id != 'Unknown' else None
+            victim_tx_id=entry.tx_id if entry.tx_id != 'Unknown' else None,
+            log_details=[] if collect_details else None
         )
         
         self.chains[entry.trace_id] = chain
@@ -143,6 +146,9 @@ class ChainTracerSinglePass:
         if not chain:
             logging.warning(f"Expected to find chain for victim TraceId {entry.trace_id}, but not found")
             return
+        
+        if chain.log_details is not None:
+            chain.log_details.append(entry.raw_line)
         
         if chain.lock_id:
             logging.warning(f"{chain.victim_trace_id} - Chain for TraceId {entry.trace_id} already has LockId {chain.lock_id}, ignoring new LockId {entry.lock_id}")
@@ -172,6 +178,9 @@ class ChainTracerSinglePass:
             logging.warning(f"Expected to find chain for victim TraceId {entry.trace_id}, but not found")
             return
         
+        if chain.log_details is not None:
+            chain.log_details.append(entry.raw_line)
+        
         if chain.victim_phy_tx_id:
             logging.warning(f"{chain.victim_trace_id} - Chain for TraceId {entry.trace_id} already has victim PhyTxId {chain.victim_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}")
             return
@@ -200,6 +209,9 @@ class ChainTracerSinglePass:
                 # Это нормально - не все break_lock_id относятся к нашим цепочкам
                 continue
 
+            if chain.log_details is not None:
+                chain.log_details.append(entry.raw_line)
+
             if chain.victim_phy_tx_id and chain.victim_phy_tx_id == entry.phy_tx_id:
                 # Когда транзакция обнаруживает, что ее лок сломан, она логирует это и в BROKEN_LOCKS  и в LocksBroken
                 # Поэтому приходится игнорировать часть строк. Не логирую, т.к. это совсем не интересно
@@ -225,6 +237,9 @@ class ChainTracerSinglePass:
             return
 
         for chain in victim_chains:
+            if chain.log_details is not None:
+                chain.log_details.append(entry.raw_line)
+            
             if chain.culprit_trace_id and chain.culprit_trace_id != entry.trace_id:
                 logging.warning(f"{chain.victim_trace_id} - Chain for PhyTxId {entry.phy_tx_id} already has culprit TraceId {chain.culprit_trace_id}, ignoring new TraceId {entry.trace_id}")
                 return
@@ -248,6 +263,8 @@ class ChainTracerSinglePass:
             return
         
         for chain in victim_chains:
+            if chain.log_details is not None:
+                chain.log_details.append(entry.raw_line)
             
             if not entry.session_id:
                 logging.warning(f"{chain.victim_trace_id} - Expected SessionId for culprit TraceId {entry.trace_id}, but not found")
@@ -271,6 +288,9 @@ class ChainTracerSinglePass:
             return
 
         for chain in victim_chains:
+            if chain.log_details is not None:
+                chain.log_details.append(entry.raw_line)
+            
             if not entry.tx_id or entry.tx_id == 'Empty':
                 logging.warning(f"{chain.victim_trace_id} - Expected valid TxId, but got {entry.tx_id}")
                 return
@@ -282,7 +302,7 @@ class ChainTracerSinglePass:
             if chain.culprit_tx_id and chain.culprit_tx_id != entry.tx_id:
                 # Обнаружился другой TxId - это ненормально, игнорируем его
                 logging.debug(f"{chain.victim_trace_id} - Chain already has culprit_tx_id {chain.culprit_tx_id}, ignoring different tx_id {entry.tx_id}")
-                return        
+                return
                     
             # В поле TxId в некоторых случаях пишется PyTxId. Нужно игнорировать такие значения
             if entry.tx_id == chain.culprit_phy_tx_id:
@@ -387,7 +407,7 @@ class ChainTracerSinglePass:
                 incomplete_count += 1
                 logging.warning(f"{chain.victim_trace_id} - Incomplete chain. Missing fields: {', '.join(missing_fields)}")
 
-        logging.debug(f"Chain analysis complete: found {len(self.chains)} TLI chains, {incomplete_count} incomplete")
+        logging.info(f"Chain analysis complete: found {len(self.chains)} TLI chains, {incomplete_count} incomplete")
     
     def _extract_table_name(self, issues: Optional[str]) -> Optional[str]:
         """Извлекает имя таблицы из описания TLI."""

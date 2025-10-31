@@ -165,21 +165,26 @@ class TestChainTracer:
         parser = LogParser()
         with open(fixture_path, 'r', encoding='utf-8') as f:
             entries = parser.parse_stream(f)
-            tracer = ChainTracerSinglePass(entries)
+            # Sort entries in reverse chronological order as expected by ChainTracerSinglePass
+            sorted_entries = sorted(entries, key=lambda x: x.timestamp or '', reverse=True)
+            tracer = ChainTracerSinglePass(sorted_entries)
             chains = tracer.find_all_invalidation_chains()
         
-        # We should find at least one chain from the test data
-        assert len(chains) >= 0  # May be 0 if chain tracing fails due to incomplete data
+        # We should find at least one complete chain from the test data
+        assert len(chains) >= 1
         
         for chain in chains:
             assert isinstance(chain, LockInvalidationChain)
             assert chain.victim_session_id is not None
             assert chain.victim_trace_id is not None
+            assert chain.victim_tx_id is not None
+            assert chain.victim_entry is not None
+            assert chain.table_name is not None
+            # These fields should be filled for complete chains
             assert chain.lock_id is not None
             assert chain.culprit_phy_tx_id is not None
             assert chain.culprit_trace_id is not None
             assert chain.culprit_session_id is not None
-            assert chain.victim_entry is not None
             
     def test_lock_invalidation_chain_dataclass(self):
         """Test LockInvalidationChain dataclass properties."""
@@ -188,15 +193,19 @@ class TestChainTracer:
         chain = LockInvalidationChain(
             victim_session_id="victim_session",
             victim_trace_id="victim_trace",
+            victim_tx_id="victim_tx_id",
+            victim_entry=victim_entry,
+            table_name="test_table",
             lock_id="test_lock",
             culprit_phy_tx_id="culprit_phy_tx",
             culprit_trace_id="culprit_trace",
-            culprit_session_id="culprit_session",
-            victim_entry=victim_entry
+            culprit_session_id="culprit_session"
         )
         
         assert chain.victim_session_id == "victim_session"
         assert chain.victim_trace_id == "victim_trace"
+        assert chain.victim_tx_id == "victim_tx_id"
+        assert chain.table_name == "test_table"
         assert chain.lock_id == "test_lock"
         assert chain.culprit_phy_tx_id == "culprit_phy_tx"
         assert chain.culprit_trace_id == "culprit_trace"
@@ -205,8 +214,6 @@ class TestChainTracer:
         
         # Test optional fields default to None
         assert chain.culprit_entry is None
-        assert chain.table_name is None
-        assert chain.victim_tx_id is None
         assert chain.culprit_tx_id is None
         assert chain.victim_queries is None
         assert chain.culprit_queries is None

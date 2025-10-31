@@ -36,3 +36,4 @@ class LockInvalidationChain:
     culprit_tx_id: Optional[str] = None
     victim_queries: Optional[List[LogEntry]] = None
     culprit_queries: Optional[List[LogEntry]] = None
+    log_details: Optional[List[str]] = None
