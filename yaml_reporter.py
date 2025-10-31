@@ -112,18 +112,24 @@ class YAMLReporter:
                 }
                 formatted_culprit_queries.append(formatted_query)
             event['culprit']['all_queries'] = formatted_culprit_queries
+
+
         
-        # Добавляет сырые записи лога для справки
-        event['raw_entries'] = {
-            'victim_log_line': chain.victim_entry.raw_line.strip()
-        }
-        
-        if chain.culprit_entry:
-            event['raw_entries']['culprit_log_line'] = chain.culprit_entry.raw_line.strip()
-        
-        # Добавляет детальные записи лога в обратном порядке, если доступны
         if chain.log_details:
-            event['raw_entries']['detailed_log_lines'] = [line.strip() for line in reversed(chain.log_details)]
+            # Добавляет детальные записи лога в обратном порядке, если доступны
+            event['raw_entries'] = {
+                 'detailed_log_lines': [line.strip() for line in reversed(chain.log_details)]
+            }
+        else:
+            # А если нет - то только первую и последнюю строку в цепочке
+            event['raw_entries'] = {
+                'victim_log_line': chain.victim_entry.raw_line.strip()
+            }
+            
+            if chain.culprit_entry:
+                event['raw_entries']['culprit_log_line'] = chain.culprit_entry.raw_line.strip()
+            
+
         
         return event
     

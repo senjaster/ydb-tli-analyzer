@@ -73,7 +73,7 @@ Examples:
     )
     
     parser.add_argument(
-        '--collect-details',
+        '--collect-details', '-d',
         action='store_true',
         help='Collect detailed log lines for each chain (may increase memory usage and processing time)'
     )

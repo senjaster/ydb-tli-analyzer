@@ -715,7 +715,7 @@ class TestChainTracer:
         
         assert len(chains) == 1
         assert chains[0].log_details is not None
-        assert len(chains[0].log_details) == 0  # Empty list initially
+        assert len(chains[0].log_details) == 1  # Should contain the TLI entry
         
         # Test with collect_details=False (default)
         tracer2 = ChainTracerSinglePass(entries)
