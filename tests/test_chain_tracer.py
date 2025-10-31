@@ -351,3 +351,375 @@ class TestChainTracer:
                 assert chain.culprit_queries[i].timestamp <= chain.culprit_queries[i + 1].timestamp
         else:
             assert chain.culprit_queries == []
+            
+    def test_chain_tracer_edge_cases(self):
+        """Test edge cases in chain tracing."""
+        # Test with missing trace_id in TLI entry
+        entries_no_trace = [
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.300000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="ERROR",
+                message_type="TLI",
+                session_id="victim_session",
+                trace_id=None,  # Missing trace_id
+                tx_id="victim_tx",
+                status="ABORTED",
+                issues="Transaction locks invalidated. Table: `test_table`",
+                raw_line="test line"
+            )
+        ]
+        
+        tracer = ChainTracerSinglePass(entries_no_trace)
+        chains = tracer.find_all_invalidation_chains()
+        assert len(chains) == 0  # Should not create chain without trace_id
+        
+    def test_chain_tracer_missing_session_id(self):
+        """Test chain creation with missing session_id."""
+        entries_no_session = [
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.300000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="ERROR",
+                message_type="TLI",
+                session_id=None,  # Missing session_id
+                trace_id="victim_trace",
+                tx_id="victim_tx",
+                status="ABORTED",
+                issues="Transaction locks invalidated. Table: `test_table`",
+                raw_line="test line"
+            )
+        ]
+        
+        tracer = ChainTracerSinglePass(entries_no_session)
+        chains = tracer.find_all_invalidation_chains()
+        assert len(chains) == 0  # Should not create chain without session_id
+        
+    def test_multiple_lock_ids_warning(self):
+        """Test warning when multiple lock_ids are present."""
+        entries = [
+            # TLI event
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.300000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="ERROR",
+                message_type="TLI",
+                session_id="victim_session",
+                trace_id="victim_trace",
+                tx_id="victim_tx",
+                status="ABORTED",
+                issues="Transaction locks invalidated. Table: `test_table`",
+                raw_line="test line"
+            ),
+            # LOCKS_BROKEN event with multiple lock_ids
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.250000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="LOCKS",
+                trace_id="victim_trace",
+                status="LOCKS_BROKEN",
+                lock_id=["12345", "67890"],  # Multiple lock_ids
+                raw_line="test line"
+            )
+        ]
+        
+        tracer = ChainTracerSinglePass(entries)
+        chains = tracer.find_all_invalidation_chains()
+        
+        assert len(chains) == 1
+        assert chains[0].lock_id == "12345"  # Should use first lock_id
+        
+    def test_duplicate_lock_id_warning(self):
+        """Test warning when trying to set lock_id twice."""
+        entries = [
+            # TLI event
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.300000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="ERROR",
+                message_type="TLI",
+                session_id="victim_session",
+                trace_id="victim_trace",
+                tx_id="victim_tx",
+                status="ABORTED",
+                issues="Transaction locks invalidated. Table: `test_table`",
+                raw_line="test line"
+            ),
+            # First LOCKS_BROKEN event
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.250000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="LOCKS",
+                trace_id="victim_trace",
+                status="LOCKS_BROKEN",
+                lock_id=["12345"],
+                raw_line="test line"
+            ),
+            # Second LOCKS_BROKEN event (duplicate)
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.240000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="LOCKS",
+                trace_id="victim_trace",
+                status="LOCKS_BROKEN",
+                lock_id=["67890"],  # Different lock_id
+                raw_line="test line"
+            )
+        ]
+        
+        tracer = ChainTracerSinglePass(entries)
+        chains = tracer.find_all_invalidation_chains()
+        
+        assert len(chains) == 1
+        assert chains[0].lock_id == "12345"  # Should keep first lock_id
+        
+    def test_culprit_phy_tx_same_as_victim(self):
+        """Test skipping culprit when phy_tx_id matches victim."""
+        entries = [
+            # TLI event
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.300000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="ERROR",
+                message_type="TLI",
+                session_id="victim_session",
+                trace_id="victim_trace",
+                tx_id="victim_tx",
+                status="ABORTED",
+                issues="Transaction locks invalidated. Table: `test_table`",
+                raw_line="test line"
+            ),
+            # LOCKS_BROKEN event
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.250000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="LOCKS",
+                trace_id="victim_trace",
+                status="LOCKS_BROKEN",
+                lock_id=["12345"],
+                phy_tx_id="same_phy_tx",
+                raw_line="test line"
+            ),
+            # Break locks event with same phy_tx_id as victim
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.200000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="BREAK",
+                phy_tx_id="same_phy_tx",  # Same as victim
+                break_lock_id=["12345"],
+                raw_line="test line"
+            )
+        ]
+        
+        tracer = ChainTracerSinglePass(entries)
+        chains = tracer.find_all_invalidation_chains()
+        
+        assert len(chains) == 1
+        assert chains[0].lock_id == "12345"
+        assert chains[0].victim_phy_tx_id == "same_phy_tx"
+        assert chains[0].culprit_phy_tx_id is None  # Should be skipped
+        
+    def test_query_collection_without_tx_id(self):
+        """Test query collection when query has no tx_id."""
+        entries = [
+            # TLI event
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.300000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="ERROR",
+                message_type="TLI",
+                session_id="victim_session",
+                trace_id="victim_trace",
+                tx_id="victim_tx",
+                status="ABORTED",
+                issues="Transaction locks invalidated. Table: `test_table`",
+                raw_line="test line"
+            ),
+            # Begin transaction
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.250000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="TX",
+                session_id="victim_session",
+                trace_id="victim_trace",
+                tx_id="victim_tx",
+                begin_tx=True,
+                raw_line="test line"
+            ),
+            # Query without tx_id but with session_id
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.200000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="QUERY",
+                session_id="victim_session",
+                trace_id="victim_trace",
+                tx_id=None,  # No tx_id
+                query_text="SELECT * FROM test_table",
+                query_action="QUERY_ACTION_EXECUTE",
+                raw_line="test line"
+            )
+        ]
+        
+        tracer = ChainTracerSinglePass(entries)
+        chains = tracer.find_all_invalidation_chains()
+        
+        assert len(chains) == 1
+        # Query should be inferred and collected
+        assert chains[0].victim_queries is not None
+        assert len(chains[0].victim_queries) == 1
+        assert chains[0].victim_queries[0].query_text == "SELECT * FROM test_table"
+        
+    def test_query_collection_no_session_no_tx(self):
+        """Test query collection when query has neither tx_id nor session_id."""
+        entries = [
+            # TLI event
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.300000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="ERROR",
+                message_type="TLI",
+                session_id="victim_session",
+                trace_id="victim_trace",
+                tx_id="victim_tx",
+                status="ABORTED",
+                issues="Transaction locks invalidated. Table: `test_table`",
+                raw_line="test line"
+            ),
+            # Query without tx_id and session_id
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.200000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="QUERY",
+                session_id=None,  # No session_id
+                trace_id="victim_trace",
+                tx_id=None,  # No tx_id
+                query_text="SELECT * FROM test_table",
+                query_action="QUERY_ACTION_EXECUTE",
+                raw_line="test line"
+            )
+        ]
+        
+        tracer = ChainTracerSinglePass(entries)
+        chains = tracer.find_all_invalidation_chains()
+        
+        assert len(chains) == 1
+        # Query should not be collected
+        assert chains[0].victim_queries == []
+        
+    def test_culprit_tx_id_same_as_phy_tx_id(self):
+        """Test skipping tx_id when it matches phy_tx_id."""
+        entries = [
+            # TLI event
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.300000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="ERROR",
+                message_type="TLI",
+                session_id="victim_session",
+                trace_id="victim_trace",
+                tx_id="victim_tx",
+                status="ABORTED",
+                issues="Transaction locks invalidated. Table: `test_table`",
+                raw_line="test line"
+            ),
+            # LOCKS_BROKEN event
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.250000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="LOCKS",
+                trace_id="victim_trace",
+                status="LOCKS_BROKEN",
+                lock_id=["12345"],
+                raw_line="test line"
+            ),
+            # Break locks event
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.200000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="BREAK",
+                phy_tx_id="67890",
+                break_lock_id=["12345"],
+                raw_line="test line"
+            ),
+            # Culprit transaction with tx_id same as phy_tx_id
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.050000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="DEBUG",
+                message_type="TX",
+                phy_tx_id="67890",
+                trace_id="culprit_trace",
+                session_id="culprit_session",
+                tx_id="67890",  # Same as phy_tx_id
+                raw_line="test line"
+            )
+        ]
+        
+        tracer = ChainTracerSinglePass(entries)
+        chains = tracer.find_all_invalidation_chains()
+        
+        assert len(chains) == 1
+        assert chains[0].culprit_phy_tx_id == "67890"
+        assert chains[0].culprit_tx_id is None  # Should be skipped
+        
+    def test_collect_details_flag(self):
+        """Test collect_details flag functionality."""
+        entries = [
+            LogEntry(
+                timestamp="2025-10-22T07:54:51.300000Z",
+                node="test-node",
+                process="test[123]",
+                log_level="ERROR",
+                message_type="TLI",
+                session_id="victim_session",
+                trace_id="victim_trace",
+                tx_id="victim_tx",
+                status="ABORTED",
+                issues="Transaction locks invalidated. Table: `test_table`",
+                raw_line="TLI log line"
+            )
+        ]
+        
+        # Test with collect_details=True
+        tracer = ChainTracerSinglePass(entries)
+        chains = tracer.find_all_invalidation_chains(collect_details=True)
+        
+        assert len(chains) == 1
+        assert chains[0].log_details is not None
+        assert len(chains[0].log_details) == 0  # Empty list initially
+        
+        # Test with collect_details=False (default)
+        tracer2 = ChainTracerSinglePass(entries)
+        chains2 = tracer2.find_all_invalidation_chains(collect_details=False)
+        
+        assert len(chains2) == 1
+        assert chains2[0].log_details is None
