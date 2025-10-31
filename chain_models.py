@@ -38,3 +38,7 @@ class LockInvalidationChain:
     victim_queries: Optional[List[LogEntry]] = None
     culprit_queries: Optional[List[LogEntry]] = None
     log_details: Optional[OrderedSet[str]] = None
+
+    @property
+    def is_victim_committed(self):
+        return self.victim_queries[-1].query_action == "QUERY_ACTION_COMMIT_TX"

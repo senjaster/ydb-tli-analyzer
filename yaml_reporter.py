@@ -71,7 +71,8 @@ class YAMLReporter:
             },
             'lock_details': {
                 'lock_id': chain.lock_id
-            }
+            },
+            'victim_committed': chain.is_victim_committed
         }
         
         # Добавляет ID транзакций, если доступны
