@@ -20,6 +20,7 @@ from chain_tracer_single_pass import ChainTracerSinglePass
 from chain_models import LockInvalidationChain
 from yaml_reporter import YAMLReporter
 from sql_reporter import SQLReporter
+from summary_reporter import SummaryReporter
 from log_sorter import sort_log_stream
 
 
@@ -39,6 +40,10 @@ Examples:
     # SQL-script-like output:
     python tli_analyzer.py --log-file docs/22_1.log --output-format sql
     python tli_analyzer.py --log-file docs/22_1.log -o sql > report.sql
+    
+    # Aggregated summary output:
+    python tli_analyzer.py --log-file docs/22_1.log --output-format summary
+    python tli_analyzer.py --log-file docs/22_1.log -o summary > summary.txt
     
     # Using stdin with grep pre-filtering:
     grep "Transaction locks invalidated\\|Acquire lock\\|Break locks" docs/22_1.log | python tli_analyzer.py -o sql
@@ -68,7 +73,7 @@ Examples:
     parser.add_argument(
         '--output-format', '-o',
         help='Output format for the report',
-        choices=['yaml', 'sql'],
+        choices=['yaml', 'sql', 'summary'],
         default='yaml'
     )
     
@@ -204,6 +209,13 @@ def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: Lo
             reporter.write_sql_report(chains)
         except Exception as e:
             logging.exception(f"Failed to generate SQL report: {e}")
+            raise e
+    elif output_format == 'summary':
+        reporter = SummaryReporter()
+        try:
+            reporter.write_summary_report(chains)
+        except Exception as e:
+            logging.exception(f"Failed to generate summary report: {e}")
             raise e
     else:  # default to yaml
         reporter = YAMLReporter()

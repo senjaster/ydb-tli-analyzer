@@ -42,3 +42,10 @@ class LockInvalidationChain:
     @property
     def is_victim_committed(self):
         return self.victim_queries[-1].query_action == "QUERY_ACTION_COMMIT_TX"
+    
+    def get_victim_hash(self):
+        return hash('|'.join((e.query_text for e in self.victim_queries)))
+    
+    def get_culprit_hash(self):
+        return hash('|'.join((e.query_text for e in self.culprit_queries)))
+
