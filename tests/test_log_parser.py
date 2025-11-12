@@ -48,7 +48,7 @@ class TestLogParser:
         assert entry.node == "ydb-static-node-3"
         assert entry.process == "ydbd[889]"
         assert entry.log_level == "DEBUG"
-        assert entry.message_type == "DATA_INTEGRITY"
+        assert entry.kikimr_service == "DATA_INTEGRITY"
         assert entry.component == "SessionActor"
         assert entry.session_id == "ydb://session/3?node_id=50005&id=MzFkMjA5YjktNWJkYzI3YzgtYjEwOGJhNDAtOWFlMmZhYzI="
         assert entry.trace_id == "01k85ekrmy9tcyvnx2qvwdkcts"
@@ -69,7 +69,7 @@ class TestLogParser:
         assert entry.node == "ydb-static-node-1"
         assert entry.process == "ydbd[844]"
         assert entry.log_level == "INFO"
-        assert entry.message_type == "DATA_INTEGRITY"
+        assert entry.kikimr_service == "DATA_INTEGRITY"
         assert entry.component == "DataShard"
         assert entry.phy_tx_id == "562949953837901"
         assert entry.break_lock_id == ["562949953837900", "844424930570469"]
@@ -119,7 +119,7 @@ class TestLogParser:
             node="test-node",
             process="test[123]",
             log_level="DEBUG",
-            message_type="TEST",
+            kikimr_service="TEST",
             session_id="test-session",
             trace_id="test-trace",
             component="TestComponent",
@@ -130,7 +130,7 @@ class TestLogParser:
         assert entry.node == "test-node"
         assert entry.process == "test[123]"
         assert entry.log_level == "DEBUG"
-        assert entry.message_type == "TEST"
+        assert entry.kikimr_service == "TEST"
         assert entry.component == "TestComponent"
         assert entry.session_id == "test-session"
         assert entry.trace_id == "test-trace"
@@ -163,7 +163,7 @@ invalid line that should be skipped
         # Check first entry (transaction locks invalidated)
         first_entry = entries[0]
         assert first_entry.node == "ydb-static-node-3"
-        assert first_entry.message_type == "DATA_INTEGRITY"
+        assert first_entry.kikimr_service == "DATA_INTEGRITY"
         assert first_entry.log_level == "DEBUG"
         assert first_entry.status == "ABORTED"
         assert "Transaction locks invalidated" in first_entry.issues
@@ -223,7 +223,7 @@ Invalid line 3"""
         entry = stream_entries[0]
         assert entry.node == "ydb-static-node-3"
         assert entry.process == "ydbd[889]"
-        assert entry.message_type == "DATA_INTEGRITY"
+        assert entry.kikimr_service == "DATA_INTEGRITY"
         assert entry.log_level == "DEBUG"
         assert entry.session_id == "test"
         assert entry.trace_id == "test123"
@@ -239,7 +239,7 @@ Invalid line 3"""
         assert entry.node == "ydb-static-node-3"
         assert entry.process == "ydbd[102832]"
         assert entry.log_level == "INFO"
-        assert entry.message_type == "DATA_INTEGRITY"
+        assert entry.kikimr_service == "DATA_INTEGRITY"
         assert entry.component == "Executer"
         assert entry.phy_tx_id == "281474977337937"
         assert entry.timestamp == "2025-10-27T07:12:38.009558Z"

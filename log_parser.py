@@ -17,7 +17,7 @@ class LogEntry:
     timestamp: str
     node: str
     process: str
-    message_type: str
+    kikimr_service: str
     log_level: str
     begin_tx: bool = False
     session_id: Optional[str] = None
@@ -97,14 +97,14 @@ class LogParser:
         if not level_match:
             return None
             
-        message_type, log_level = level_match.groups()
+        kikimr_service, log_level = level_match.groups()
         
         entry = LogEntry(
             timestamp="",
             node=node,
             process=f"{process}[{pid}]",
             log_level=log_level,
-            message_type=message_type,
+            kikimr_service=kikimr_service,
             raw_line=line
         )
         
