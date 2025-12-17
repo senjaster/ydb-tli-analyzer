@@ -4,7 +4,6 @@ Shared data models for chain tracing functionality.
 """
 
 from typing import List, Optional
-from ordered_set import OrderedSet
 from dataclasses import dataclass
 from log_parser import LogEntry
 
@@ -37,7 +36,7 @@ class LockInvalidationChain:
     culprit_tx_id: Optional[str] = None
     victim_queries: Optional[List[LogEntry]] = None
     culprit_queries: Optional[List[LogEntry]] = None
-    log_details: Optional[OrderedSet[str]] = None
+    log_details: Optional[List[str]] = None
 
     @property
     def is_victim_committed(self):

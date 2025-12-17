@@ -10,7 +10,6 @@
 from typing import List, Optional, Dict, Iterable
 from log_parser import LogEntry
 from chain_models import LockInvalidationChain
-from ordered_set import OrderedSet
 import re
 import logging
 from collections import defaultdict
@@ -135,7 +134,7 @@ class ChainTracerSinglePass:
             victim_entry=entry,
             table_name=table_name,
             victim_tx_id=entry.tx_id if entry.tx_id != 'Unknown' else None,
-            log_details=OrderedSet([entry.raw_line]) if collect_details else None
+            log_details=[entry.raw_line] if collect_details else None
         )
         
         self.chains[entry.trace_id] = chain
@@ -148,8 +147,8 @@ class ChainTracerSinglePass:
             logging.warning(f"Expected to find chain for victim TraceId {entry.trace_id}, but not found")
             return
         
-        if chain.log_details is not None:
-            chain.log_details.add(entry.raw_line)
+        if chain.log_details is not None and entry.raw_line not in chain.log_details:
+            chain.log_details.append(entry.raw_line)
         
         if chain.lock_id:
             logging.warning(f"{chain.victim_trace_id} - Chain for TraceId {entry.trace_id} already has LockId {chain.lock_id}, ignoring new LockId {entry.lock_id}")
@@ -179,8 +178,8 @@ class ChainTracerSinglePass:
             logging.warning(f"Expected to find chain for victim TraceId {entry.trace_id}, but not found")
             return
         
-        if chain.log_details is not None:
-            chain.log_details.add(entry.raw_line)
+        if chain.log_details is not None and entry.raw_line not in chain.log_details:
+            chain.log_details.append(entry.raw_line)
         
         if chain.victim_phy_tx_id:
             logging.warning(f"{chain.victim_trace_id} - Chain for TraceId {entry.trace_id} already has victim PhyTxId {chain.victim_phy_tx_id}, ignoring new PhyTxId {entry.phy_tx_id}")
@@ -210,8 +209,8 @@ class ChainTracerSinglePass:
                 # Это нормально - не все break_lock_id относятся к нашим цепочкам
                 continue
 
-            if chain.log_details is not None:
-                chain.log_details.add(entry.raw_line)
+            if chain.log_details is not None and entry.raw_line not in chain.log_details:
+                chain.log_details.append(entry.raw_line)
 
             if chain.victim_phy_tx_id and chain.victim_phy_tx_id == entry.phy_tx_id:
                 # Когда транзакция обнаруживает, что ее лок сломан, она логирует это и в BROKEN_LOCKS  и в LocksBroken
@@ -238,8 +237,8 @@ class ChainTracerSinglePass:
             return
 
         for chain in victim_chains:
-            if chain.log_details is not None:
-                chain.log_details.add(entry.raw_line)
+            if chain.log_details is not None and entry.raw_line not in chain.log_details:
+                chain.log_details.append(entry.raw_line)
             
             if chain.culprit_trace_id and chain.culprit_trace_id != entry.trace_id:
                 logging.warning(f"{chain.victim_trace_id} - Chain for PhyTxId {entry.phy_tx_id} already has culprit TraceId {chain.culprit_trace_id}, ignoring new TraceId {entry.trace_id}")
@@ -264,8 +263,8 @@ class ChainTracerSinglePass:
             return
         
         for chain in victim_chains:
-            if chain.log_details is not None:
-                chain.log_details.add(entry.raw_line)
+            if chain.log_details is not None and entry.raw_line not in chain.log_details:
+                chain.log_details.append(entry.raw_line)
             
             if not entry.session_id:
                 logging.warning(f"{chain.victim_trace_id} - Expected SessionId for culprit TraceId {entry.trace_id}, but not found")
@@ -289,8 +288,8 @@ class ChainTracerSinglePass:
             return
 
         for chain in victim_chains:
-            if chain.log_details is not None:
-                chain.log_details.add(entry.raw_line)
+            if chain.log_details is not None and entry.raw_line not in chain.log_details:
+                chain.log_details.append(entry.raw_line)
             
             if not entry.tx_id or entry.tx_id == 'Empty':
                 logging.warning(f"{chain.victim_trace_id} - Expected valid TxId, but got {entry.tx_id}")
