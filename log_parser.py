@@ -5,6 +5,7 @@
 """
 
 import re
+import logging
 from typing import Dict, Optional, List, Iterator, TextIO
 from dataclasses import dataclass
 from datetime import datetime
@@ -135,11 +136,16 @@ class LogParser:
     
     def parse_stream(self, stream: TextIO) -> Iterator[LogEntry]:
         """Парсит поток данных (файл или stdin) и возвращает генератор LogEntry объектов"""
+        logger = logging.getLogger(__name__)
+        processed_count = 0
         try:
             for line_num, line in enumerate(stream, 1):
                 try:
                     entry = self.parse_line(line)
                     if entry:
+                        processed_count += 1
+                        if processed_count % 1_000_000 == 0:
+                            logger.info(f"Processed {processed_count:,} rows")
                         yield entry
                 except Exception as e:
                     print(f"Warning: Failed to parse line {line_num}: {e}")

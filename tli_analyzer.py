@@ -32,23 +32,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # YAML output (default):
+    # Analyze log and write all three reports to current directory:
     python tli_analyzer.py --log-file docs/22_1.log
-    python tli_analyzer.py --log-file docs/22_1.log > report.yaml
-    python tli_analyzer.py --log-file docs/22_1_sorted.log --no-sort > report.yaml
     
-    # SQL-script-like output:
-    python tli_analyzer.py --log-file docs/22_1.log --output-format sql
-    python tli_analyzer.py --log-file docs/22_1.log -o sql > report.sql
-    
-    # Aggregated summary output:
-    python tli_analyzer.py --log-file docs/22_1.log --output-format summary
-    python tli_analyzer.py --log-file docs/22_1.log -o summary > summary.txt
+    # Analyze log and write reports to specific folder:
+    python tli_analyzer.py --log-file docs/22_1.log --output-folder ./results
+    python tli_analyzer.py --log-file docs/22_1.log -o ./results
     
     # Using stdin with grep pre-filtering:
-    grep "Transaction locks invalidated\\|Acquire lock\\|Break locks" docs/22_1.log | python tli_analyzer.py -o sql
-    cat docs/22_1.log | python tli_analyzer.py --output-format yaml > report.yaml
-    cat docs/22_1_sorted.log | python tli_analyzer.py --no-sort -o sql > report.sql
+    grep "Transaction locks invalidated\\|Acquire lock\\|Break locks" docs/22_1.log | python tli_analyzer.py
+    cat docs/22_1.log | python tli_analyzer.py --output-folder ./results
+    cat docs/22_1_sorted.log | python tli_analyzer.py --no-sort -o ./results
         """
     )
     
@@ -61,7 +55,7 @@ Examples:
         '--log-format', '-f',
         help='Specify the input log format. "systemd" for logs from journalctl (default), "raw" for direct ydbd log files',
         choices=['systemd', 'raw'],
-        default='systemd'
+        default='raw'
     )
 
     parser.add_argument(
@@ -71,10 +65,9 @@ Examples:
     )
     
     parser.add_argument(
-        '--output-format', '-o',
-        help='Output format for the report',
-        choices=['yaml', 'sql', 'summary'],
-        default='yaml'
+        '--output-folder', '-o',
+        help='Output folder for the report files (default: current directory)',
+        default='.'
     )
     
     parser.add_argument(
@@ -127,7 +120,7 @@ Examples:
     format = LogFormat(args.log_format or 'systemd')
     
     try:
-        analyze_logs(input_source, not args.no_sort, format, args.output_format, args.collect_details)
+        analyze_logs(input_source, not args.no_sort, format, args.output_folder, args.collect_details)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -139,16 +132,10 @@ def _configure_logging(verbosity: int) -> None:
         # Quiet
         level = logging.ERROR
     elif verbosity == 0:
-        # Default: only show warnings and errors
-        level = logging.WARNING
-    elif verbosity == 1:
-        # -v: show info messages
+        # Default: only show info and warnings
         level = logging.INFO
-    elif verbosity == 2:
-        # -vv: show debug messages
-        level = logging.DEBUG
     else:
-        # -vvv and beyond: show all debug messages with more detail
+        # -v: show all messages
         level = logging.DEBUG
     
     # Configure the root logger
@@ -182,7 +169,7 @@ def get_input_stream(input_source: Optional[str], sort_logs: bool, format: LogFo
         return sys.stdin
 
 
-def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: LogFormat = LogFormat.SYSTEMD, output_format: str = 'yaml', collect_details: bool = False) -> None:
+def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: LogFormat = LogFormat.SYSTEMD, output_folder: str = '.', collect_details: bool = False) -> None:
     """Анализирует лог (из файла или stdin) и генерирует отчет."""
 
     parser = LogParser(format)
@@ -200,30 +187,53 @@ def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: Lo
         raise e
     
     if not chains:
+        logging.error("No transaction lock invalidation (TLI) events found in the logs.")
+        logging.error("This could mean:")
+        logging.error("  - The logs don't contain TLI events")
+        logging.error("  - The log format is incorrect (try --log-format raw or systemd)")
+        logging.error("  - The logs are missing required DATA_INTEGRITY entries")
+        logging.error("  - The time period filtered doesn't contain TLI events")
         return
     
-    # Choose reporter based on output format
-    if output_format == 'sql':
-        reporter = SQLReporter()
-        try:
-            reporter.write_sql_report(chains)
-        except Exception as e:
-            logging.exception(f"Failed to generate SQL report: {e}")
-            raise e
-    elif output_format == 'summary':
-        reporter = SummaryReporter()
-        try:
-            reporter.write_summary_report(chains)
-        except Exception as e:
-            logging.exception(f"Failed to generate summary report: {e}")
-            raise e
-    else:  # default to yaml
-        reporter = YAMLReporter()
-        try:
-            reporter.write_yaml_report(chains)
-        except Exception as e:
-            logging.exception(f"Failed to generate YAML report: {e}")
-            raise e
+    # Create output folder if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Write all three report formats to files
+    sql_path = os.path.join(output_folder, 'report.sql')
+    yaml_path = os.path.join(output_folder, 'report.yaml')
+    summary_path = os.path.join(output_folder, 'summary.txt')
+    
+    # Generate SQL report
+    try:
+        logging.info(f"Writing SQL report to {sql_path}")
+        with open(sql_path, 'w', encoding='utf-8') as f:
+            sql_reporter = SQLReporter()
+            sql_reporter.write_sql_report(chains, f)
+    except Exception as e:
+        logging.exception(f"Failed to generate SQL report: {e}")
+        raise e
+    
+    # Generate YAML report
+    try:
+        logging.info(f"Writing YAML report to {yaml_path}")
+        with open(yaml_path, 'w', encoding='utf-8') as f:
+            yaml_reporter = YAMLReporter()
+            yaml_reporter.write_yaml_report(chains, f)
+    except Exception as e:
+        logging.exception(f"Failed to generate YAML report: {e}")
+        raise e
+    
+    # Generate summary report
+    try:
+        logging.info(f"Writing summary report to {summary_path}")
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            summary_reporter = SummaryReporter()
+            summary_reporter.write_summary_report(chains, f)
+    except Exception as e:
+        logging.exception(f"Failed to generate summary report: {e}")
+        raise e
+    
+    logging.info(f"All reports written successfully to {output_folder}")
 
 
 if __name__ == "__main__":

@@ -335,9 +335,9 @@ class ChainTracerSinglePass:
                 if inferred_tx:
                     self.queries_by_tx[inferred_tx].append(entry)
                 else:
-                    logging.warning(f"Query has no TxId and unable to infer TxId from SessionId {entry.session_id}")
+                    logging.debug(f"Query has no TxId and unable to infer TxId from SessionId {entry.session_id}")
             else:
-                logging.warning(f"Query entry has QueryText and QueryAction but no TxId and no SessionId")
+                logging.debug(f"Query entry has QueryText and QueryAction but no TxId and no SessionId")
 
     
     def _populate_queries(self):
@@ -405,7 +405,7 @@ class ChainTracerSinglePass:
             # Логируем предупреждения для любых отсутствующих полей
             if missing_fields:
                 incomplete_count += 1
-                logging.warning(f"{chain.victim_trace_id} - Incomplete chain. Missing fields: {', '.join(missing_fields)}")
+                logging.debug(f"{chain.victim_trace_id} - Incomplete chain. Missing fields: {', '.join(missing_fields)}")
 
         logging.info(f"Chain analysis complete: found {len(self.chains)} TLI chains, {incomplete_count} incomplete")
     
