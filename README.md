@@ -20,6 +20,7 @@
             level: 8
       data_integrity_trails_config: !inherit
         query_text_log_mode: ORIGINAL
+        keys_log_mode: ORIGINAL
 ```
 
 После применения конфига необходимо перезагрузить узлы базы данных.
