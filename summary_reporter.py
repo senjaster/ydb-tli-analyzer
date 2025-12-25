@@ -17,44 +17,87 @@ class SummaryReporter:
     def __init__(self):
         pass
     
-    def write_summary_report(self, chains: List[LockInvalidationChain], file: TextIO = sys.stdout) -> None:
-        """Writes aggregated summary report to the specified file."""
+    def write_summary_report(self, chains: List[LockInvalidationChain], file: TextIO = sys.stdout, only_found: bool = False) -> None:
+        """Writes aggregated summary report to the specified file.
+        
+        Args:
+            chains: List of lock invalidation chains to report
+            file: Output file stream
+            only_found: If True, only include chains where culprit has been found
+        """
         
         if not chains:
             file.write("No transaction lock invalidation events found\n")
             return
         
+        # Filter chains if only_found is True
+        filtered_chains = self._filter_chains(chains, only_found)
+        
+        if not filtered_chains:
+            file.write("No transaction lock invalidation events with found culprits\n")
+            return
+        
         # Write header
-        self._write_header(chains, file)
+        self._write_header(filtered_chains, file, only_found)
         
         # Aggregate combinations
-        combinations = self._aggregate_combinations(chains)
+        combinations = self._aggregate_combinations(filtered_chains, only_found)
         
         # Write aggregated results
         self._write_aggregated_results(combinations, file)
     
-    def _write_header(self, chains: List[LockInvalidationChain], file: TextIO) -> None:
+    def _filter_chains(self, chains: List[LockInvalidationChain], only_found: bool) -> List[LockInvalidationChain]:
+        """Filters chains based on whether culprit has been found.
+        
+        Args:
+            chains: List of all chains
+            only_found: If True, only return chains where culprit has been found
+            
+        Returns:
+            Filtered list of chains
+        """
+        if not only_found:
+            return chains
+        
+        # Filter chains that have both victim and culprit queries
+        return [chain for chain in chains if chain.victim_queries and chain.culprit_queries]
+    
+    def _write_header(self, chains: List[LockInvalidationChain], file: TextIO, only_found: bool = False) -> None:
         """Writes report header with metadata."""
         file.write("=" * 80 + "\n")
-        file.write("YDB Transaction Lock Invalidation (TLI) Aggregated Summary\n")
+        if only_found:
+            file.write("YDB Transaction Lock Invalidation (TLI) Aggregated Summary - Culprits Found\n")
+        else:
+            file.write("YDB Transaction Lock Invalidation (TLI) Aggregated Summary\n")
         file.write("=" * 80 + "\n")
         file.write(f"Generated at: {datetime.now().isoformat()}\n")
         file.write(f"Total invalidation events: {len(chains)}\n")
         file.write("=" * 80 + "\n\n")
     
-    def _aggregate_combinations(self, chains: List[LockInvalidationChain]) -> Dict[Tuple[int, int], List[LockInvalidationChain]]:
-        """Aggregates chains by victim+culprit hash combinations."""
+    def _aggregate_combinations(self, chains: List[LockInvalidationChain], only_found: bool = False) -> Dict[Tuple[int, int], List[LockInvalidationChain]]:
+        """Aggregates chains by victim+culprit hash combinations.
+        
+        Args:
+            chains: List of chains to aggregate
+            only_found: If True, skip chains without culprits (already filtered, but double-check)
+        """
         
         combinations = defaultdict(list)
         
         for chain in chains:
-            # Skip chains without both victim and culprit queries
-            if not chain.victim_queries or not chain.culprit_queries:
-                continue
-            
-            victim_hash = chain.get_victim_hash()
-            culprit_hash = chain.get_culprit_hash()
-            combination_key = (victim_hash, culprit_hash)
+            # For only_found mode, skip chains without both victim and culprit queries
+            # For all events mode, we need to handle chains without culprits differently
+            if only_found:
+                if not chain.victim_queries or not chain.culprit_queries:
+                    continue
+                victim_hash = chain.get_victim_hash()
+                culprit_hash = chain.get_culprit_hash()
+                combination_key = (victim_hash, culprit_hash)
+            else:
+                # For all events, use victim hash and culprit hash (or 0 if no culprit)
+                victim_hash = chain.get_victim_hash() if chain.victim_queries else 0
+                culprit_hash = chain.get_culprit_hash() if chain.culprit_queries else 0
+                combination_key = (victim_hash, culprit_hash)
             
             combinations[combination_key].append(chain)
         
@@ -114,16 +157,18 @@ class SummaryReporter:
                     else:
                         file.write(f"  {j}. {query.query_action}\n")
             else:
-                file.write("  No culprit queries available\n")
+                file.write("  CULPRIT NOT FOUND\n")
             
             file.write("\n")
             
             # Write additional details
             file.write("DETAILS:\n")
             file.write(f"  Table: {representative_chain.table_name}\n")
-            file.write(f"  Victim Hash: {victim_hash}\n")
-            file.write(f"  Culprit Hash: {culprit_hash}\n")
-            if victim_hash == culprit_hash:
+            if victim_hash != 0:
+                file.write(f"  Victim Hash: {victim_hash}\n")
+            if culprit_hash != 0:
+                file.write(f"  Culprit Hash: {culprit_hash}\n")
+            if victim_hash == culprit_hash and victim_hash != 0:
                 file.write(f"  Victim and cuplrit are different instances of the same transaction.\n")
             
             # Show timestamps 

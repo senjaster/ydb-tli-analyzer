@@ -198,10 +198,11 @@ def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: Lo
     # Create output folder if it doesn't exist
     os.makedirs(output_folder, exist_ok=True)
     
-    # Write all three report formats to files
+    # Write all report formats to files
     sql_path = os.path.join(output_folder, 'report.sql')
     yaml_path = os.path.join(output_folder, 'report.yaml')
     summary_path = os.path.join(output_folder, 'summary.txt')
+    summary_found_path = os.path.join(output_folder, 'summary_found.txt')
     
     # Generate SQL report
     try:
@@ -223,14 +224,24 @@ def analyze_logs(input_source: Optional[str], sort_logs: bool = True, format: Lo
         logging.exception(f"Failed to generate YAML report: {e}")
         raise e
     
-    # Generate summary report
+    # Generate summary report (all events)
     try:
         logging.info(f"Writing summary report to {summary_path}")
         with open(summary_path, 'w', encoding='utf-8') as f:
             summary_reporter = SummaryReporter()
-            summary_reporter.write_summary_report(chains, f)
+            summary_reporter.write_summary_report(chains, f, only_found=False)
     except Exception as e:
         logging.exception(f"Failed to generate summary report: {e}")
+        raise e
+    
+    # Generate summary report (only events with found culprits)
+    try:
+        logging.info(f"Writing summary report (found culprits only) to {summary_found_path}")
+        with open(summary_found_path, 'w', encoding='utf-8') as f:
+            summary_reporter = SummaryReporter()
+            summary_reporter.write_summary_report(chains, f, only_found=True)
+    except Exception as e:
+        logging.exception(f"Failed to generate summary report (found culprits): {e}")
         raise e
     
     logging.info(f"All reports written successfully to {output_folder}")
