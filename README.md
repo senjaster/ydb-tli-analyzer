@@ -60,7 +60,7 @@ StandardError=append:/var/log/ydbd-database-a.log
 
 Скачайте проект с GitHub:
 ```bash
-git clone <repository-url>
+git clone https://github.com/senjaster/ydb-tli-analyzer.git
 cd ydb-tli-analyzer
 ```
 
