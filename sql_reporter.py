@@ -74,6 +74,10 @@ class SQLReporter:
         file.write(f"-- Session ID: {chain.victim_session_id}\n")
         if chain.victim_tx_id:
             file.write(f"-- Transaction ID: {chain.victim_tx_id}\n")
+        if chain.victim_queries:
+            file.write(f"-- Transaction Start: {chain.victim_queries[0].timestamp or 'unknown'}\n")
+            file.write(f"-- Transaction End: {chain.victim_queries[-1].timestamp or 'unknown'}\n")
+
         file.write("\n")
         
         # Write victim queries
